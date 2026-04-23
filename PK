@@ -46,7 +46,7 @@ TradeTab:CreateButton({
 	Callback = function()
         fireItems({
             {"Atomic Core", 2}, {"Blood Ring", 4}, {"Cursed Flesh", 2},
-            {"HÅgyoku Fragment", 2}, {"Infinity Essence", 2}, {"Phantasm Core", 2},
+            {"Hōgyoku Fragment", 2}, {"Infinity Essence", 2}, {"Phantasm Core", 2},
             {"Slime Core", 3}, {"Soul Flame", 3}, {"Reiatsu Core", 4},
             {"Dark Ring", 5}, {"Dismantle Fang", 7}, {"Void Fragment", 5},
             {"Limitless Ring", 2}, {"Azure Heart", 2}, {"Evolution Fragment", 2},
