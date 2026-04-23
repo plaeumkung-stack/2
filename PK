@@ -80,7 +80,7 @@ TradeTab:CreateButton({
 	Name = "Set Garo",
 	Callback = function()
         fireItems({
-            {"Monster Pulse", 20}, {"Galaxy Shard", 50}, {"Star Mark", 80}, {"Cosmic Essence", 12},
+            {"Monster Pulse", 2}, {"Galaxy Shard", 5}, {"Star Mark", 8}, {"Cosmic Essence", 12},
         })
         notify('✅ Garo — ใส่ครบแล้ว')
   	end    
