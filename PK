@@ -84,6 +84,16 @@ HotSetTab:CreateButton({
   	end    
 })
 
+HotSetTab:CreateButton({
+	Name = "Aura",
+	Callback = function()
+        fireItems({
+            {"Aura Crate", 500}, 
+        })
+        notify('✅ Aura — ใส่ครบแล้ว')
+  	end    
+})
+
 -- ============================================================
 -- Trade Tab
 -- ============================================================
