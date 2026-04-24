@@ -4,7 +4,7 @@
 local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
-   Name = "Auto trade PK",
+   Name = "Auto trade PLAEUMKUNG",
    LoadingTitle = "กำลังโหลด Trade Auto...",
    LoadingSubtitle = "Mobile Version",
    ConfigurationSaving = { Enabled = false },
@@ -35,6 +35,54 @@ local function fireItems(items)
         task.wait(0.5)
     end
 end
+
+-- ============================================================
+-- Hot Set Tab
+-- ============================================================
+local HotSetTab = Window:CreateTab("Hot Set", 4483362458)
+
+HotSetTab:CreateButton({
+	Name = "Set Relic (Parts 1-8)",
+	Callback = function()
+        fireItems({
+            {"Relic Part #1", 70}, {"Relic Part #2", 15},
+            {"Relic Part #3", 75}, {"Relic Part #4", 20},
+            {"Relic Part #5", 30}, {"Relic Part #6", 25},
+            {"Relic Part #7", 40}, {"Relic Part #8", 30},
+        })
+        notify('✅ Relic Set — ใส่ครบแล้ว')
+  	end    
+})
+
+HotSetTab:CreateButton({
+	Name = "Set Frieren",
+	Callback = function()
+        fireItems({
+            {"Mana Core", 1}, {"Magic Essence", 5}, {"Ancient Fragment", 10}, {"Spell Echo", 18}, {"Easter Egg", 500}, 
+        })
+        notify('✅ Frieren — ใส่ครบแล้ว')
+  	end    
+})
+
+HotSetTab:CreateButton({
+	Name = "Set Dio",
+	Callback = function()
+        fireItems({
+            {"Vampire Omen", 2}, {"World Core", 6}, {"Time Remnant", 12}, {"Dominion Brand", 80}, {"Power Fragment", 20}, 
+        })
+        notify('✅ Dio — ใส่ครบแล้ว')
+  	end    
+})
+
+HotSetTab:CreateButton({
+	Name = "Set Garo",
+	Callback = function()
+        fireItems({
+            {"Monster Pulse", 2}, {"Galaxy Shard", 5}, {"Star Mark", 8}, {"Cosmic Essence", 12},
+        })
+        notify('✅ Garo — ใส่ครบแล้ว')
+  	end    
+})
 
 -- ============================================================
 -- Trade Tab
@@ -83,43 +131,6 @@ TradeTab:CreateButton({
             {"Moon Crest", 3}, {"Crescent Shard", 14}, {"Lunar Essence", 9}, {"Demon Remnant", 16}, {"Upper Seal", 110},
         })
         notify('✅ Moon Slayer+F — ใส่ครบแล้ว')
-  	end    
-})
-TradeTab:CreateButton({
-	Name = "Set Garo",
-	Callback = function()
-        fireItems({
-            {"Monster Pulse", 2}, {"Galaxy Shard", 5}, {"Star Mark", 8}, {"Cosmic Essence", 12},
-        })
-        notify('✅ Garo — ใส่ครบแล้ว')
-  	end    
-})
-
-
-TradeTab:CreateButton({
-	Name = "Set Dio",
-	Callback = function()
-        fireItems({
-            {"Vampire Omen", 2}, {"World Core", 6}, {"Time Remnant", 12}, {"Dominion Brand", 80}, {"Power Fragment", 20}, 
-        })
-        notify('✅ Dio — ใส่ครบแล้ว')
-  	end    
-})
--- ============================================================
--- Relic Set Tab
--- ============================================================
-local RelicTab = Window:CreateTab("Relic Set", 4483362458)
-
-RelicTab:CreateButton({
-	Name = "Set Relic (Parts 1-8)",
-	Callback = function()
-        fireItems({
-            {"Relic Part #1", 70}, {"Relic Part #2", 15},
-            {"Relic Part #3", 75}, {"Relic Part #4", 20},
-            {"Relic Part #5", 30}, {"Relic Part #6", 25},
-            {"Relic Part #7", 40}, {"Relic Part #8", 30},
-        })
-        notify('✅ Relic Set — ใส่ครบแล้ว')
   	end    
 })
 
