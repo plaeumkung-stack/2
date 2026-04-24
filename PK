@@ -55,22 +55,22 @@ HotSetTab:CreateButton({
 })
 
 HotSetTab:CreateButton({
+	Name = "Aura",
+	Callback = function()
+        fireItems({
+            {"Aura Crate", 500}, 
+        })
+        notify('✅ Aura — ใส่ครบแล้ว')
+  	end    
+})
+
+HotSetTab:CreateButton({
 	Name = "Set Frieren",
 	Callback = function()
         fireItems({
             {"Mana Core", 1}, {"Magic Essence", 5}, {"Ancient Fragment", 10}, {"Spell Echo", 18}, {"Easter Egg", 500}, 
         })
         notify('✅ Frieren — ใส่ครบแล้ว')
-  	end    
-})
-
-HotSetTab:CreateButton({
-	Name = "Set Dio",
-	Callback = function()
-        fireItems({
-            {"Vampire Omen", 2}, {"World Core", 6}, {"Time Remnant", 12}, {"Dominion Brand", 80}, {"Power Fragment", 20}, 
-        })
-        notify('✅ Dio — ใส่ครบแล้ว')
   	end    
 })
 
@@ -85,12 +85,12 @@ HotSetTab:CreateButton({
 })
 
 HotSetTab:CreateButton({
-	Name = "Aura",
+	Name = "Set Dio",
 	Callback = function()
         fireItems({
-            {"Aura Crate", 500}, 
+            {"Vampire Omen", 2}, {"World Core", 6}, {"Time Remnant", 12}, {"Dominion Brand", 80}, {"Power Fragment", 20}, 
         })
-        notify('✅ Aura — ใส่ครบแล้ว')
+        notify('✅ Dio — ใส่ครบแล้ว')
   	end    
 })
 
