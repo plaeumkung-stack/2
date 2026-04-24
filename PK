@@ -67,6 +67,16 @@ TradeTab:CreateButton({
 })
 
 TradeTab:CreateButton({
+	Name = "Set Esdeath",
+	Callback = function()
+        fireItems({
+            {"Ice Core", 3}, {"Frozen Brand", 14}, {"Glacier Remnant", 9}, {"Battle Shard", 17}, {"Frost Relic", 110},
+        })
+        notify('✅ Esdeath — ใส่ครบแล้ว')
+  	end    
+})
+
+TradeTab:CreateButton({
 	Name = "Set Moon Slayer+F",
 	Callback = function()
         fireItems({
@@ -75,7 +85,6 @@ TradeTab:CreateButton({
         notify('✅ Moon Slayer+F — ใส่ครบแล้ว')
   	end    
 })
-
 TradeTab:CreateButton({
 	Name = "Set Garo",
 	Callback = function()
