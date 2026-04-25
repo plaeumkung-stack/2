@@ -1,89 +1,110 @@
-local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
+local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
-local Window = Fluent:CreateWindow({
-    Title = "PK-HUB | APOCALYPSE SURVIVAL",
-    SubTitle = "Auto-Farm & Seller Edition",
-    TabWidth = 160,
-    Size = UDim2.fromOffset(580, 460),
-    Acrylic = true,
-    Theme = "Dark",
-    MinimizeKey = Enum.KeyCode.LeftControl
+local Window = Rayfield:CreateWindow({
+   Name = "PK-HUB | APOCALYPSE PRO",
+   LoadingTitle = "กำลังเจาะระบบเอาชีวิตรอด...",
+   LoadingSubtitle = "by Plaeumkung",
+   ConfigurationSaving = { Enabled = false },
+   KeySystem = false,
 })
 
-local Tabs = {
-    Main = Window:AddTab({ Title = "Survival", Icon = "shield" }),
-    Combat = Window:AddTab({ Title = "Combat", Icon = "crosshair" }),
-    Misc = Window:AddTab({ Title = "Misc", Icon = "box" })
-}
+-- ── Fix Speed Hack (แบบไม่วาร์ปกลับ) ──────────────────────
+local MainTab = Window:CreateTab("Main", 4483362458)
 
-local Options = Fluent.Options
+MainTab:AddSlider({
+   Name = "Speed Hack (เดินเนียน)",
+   Min = 16,
+   Max = 100,
+   Default = 16,
+   Color = Color3.fromRGB(255, 255, 255),
+   Increment = 1,
+   Suffix = "Speed",
+   Callback = function(Value)
+      -- ใช้คำสั่งแบบนี้จะลดการโดนดึงกลับ
+      getgenv().WalkSpeedValue = Value
+      task.spawn(function()
+          while getgenv().WalkSpeedValue == Value do
+              game:GetService("Players").LocalPlayer.Character.Humanoid.WalkSpeed = Value
+              task.wait(0.1)
+          end
+      end)
+   end,
+})
 
--- ── SURVIVAL SECTION ────────────────────────────────────────
-
-Tabs.Main:AddToggle("GodMode", {Title = "God Mode (อมตะ)", Default = false})
-Tabs.Main:AddToggle("AutoEat", {Title = "Auto Eat/Drink (กิน/ดื่ม ออโต้)", Default = false})
-Tabs.Main:AddToggle("NoDarkness", {Title = "Full Bright (ปิดความมืด)", Default = false})
-
--- ระบบ Full Bright (มองเห็นตอนกลางคืน)
-task.spawn(function()
-    while task.wait(1) do
-        if Options.NoDarkness.Value then
-            game:GetService("Lighting").Brightness = 2
-            game:GetService("Lighting").ClockTime = 14
-            game:GetService("Lighting").FogEnd = 100000
-        end
-    end
-end)
-
--- ── COMBAT SECTION (ล่าซอมบี้ปั๊มเวล) ───────────────────────────
-
-Tabs.Combat:AddToggle("KillAura", {Title = "Kill Aura (ตีกระจายรอบตัว)", Default = false})
-Tabs.Combat:AddSlider("AuraRange", {Title = "ระยะ Kill Aura", Default = 15, Min = 5, Max = 50, Rounding = 1})
-
-task.spawn(function()
-    while task.wait(0.1) do
-        if Options.KillAura.Value then
+-- ── Fix Kill Aura (แบบเนียนๆ) ─────────────────────────────
+MainTab:AddToggle({
+   Name = "Kill Aura (ตีกระจายรอบตัว)",
+   CurrentValue = false,
+   Flag = "KillAura",
+   Callback = function(Value)
+      getgenv().KillAura = Value
+      task.spawn(function()
+         while getgenv().KillAura do
             pcall(function()
-                local character = game.Players.LocalPlayer.Character
-                for _, enemy in pairs(game:GetService("Workspace").Enemies:GetChildren()) do -- ปรับชื่อโฟลเดอร์ตามแมพ
-                    local distance = (enemy.HumanoidRootPart.Position - character.HumanoidRootPart.Position).Magnitude
-                    if distance <= Options.AuraRange.Value then
-                        -- ส่ง Remote ตี (ต้องแก้ชื่อ Remote ตามของแมพ)
-                        -- game:GetService("ReplicatedStorage").Remotes.Attack:FireServer(enemy)
-                    end
-                end
+               for _, v in pairs(game.Workspace:GetChildren()) do
+                  if v:FindFirstChild("Humanoid") and v.Name ~= game.Players.LocalPlayer.Name then
+                     local dist = (game.Players.LocalPlayer.Character.HumanoidRootPart.Position - v.HumanoidRootPart.Position).Magnitude
+                     if dist < 15 then
+                        -- จำลองการคลิกตี (ใช้ได้กับเกือบทุกแมพ)
+                        local tool = game.Players.LocalPlayer.Character:FindFirstChildOfClass("Tool")
+                        if tool then 
+                            tool:Activate() 
+                            firetouchinterest(v.HumanoidRootPart, tool.Handle, 0)
+                            firetouchinterest(v.HumanoidRootPart, tool.Handle, 1)
+                        end
+                     end
+                  end
+               end
             end)
-        end
-    end
-end)
-
--- ── MISC SECTION (หาของปั้นรหัส) ─────────────────────────────
-
-Tabs.Misc:AddButton({
-    Title = "Auto Loot Items (เก็บของรอบตัว)",
-    Description = "ดูดไอเทมที่ตกอยู่รอบๆ เข้าตัวทันที",
-    Callback = function()
-        for _, item in pairs(game:GetService("Workspace").Items:GetChildren()) do -- ปรับชื่อตามแมพ
-            if item:IsA("BasePart") or item:FindFirstChild("Handle") then
-                item.CFrame = game.Players.LocalPlayer.Character.HumanoidRootPart.CFrame
-            end
-        end
-    end
+            task.wait(0.2)
+         end
+      end)
+   end,
 })
 
-Tabs.Misc:AddSlider("WS", {
-    Title = "Speed Hack",
-    Default = 16,
-    Min = 16,
-    Max = 150,
-    Rounding = 0,
-    Callback = function(v) game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v end
+-- ── Fix God Mode (แบบล่องหนเลือด) ──────────────────────────
+MainTab:AddToggle({
+   Name = "Semi-God Mode",
+   CurrentValue = false,
+   Callback = function(Value)
+      getgenv().GodMode = Value
+      if Value then
+          -- วิธีแก้เผื่อ God Mode ตรงๆ โดนดัก คือการลบส่วนเจ็บออก (ใช้ได้บางแมพ)
+          local char = game.Players.LocalPlayer.Character
+          if char:FindFirstChild("Animate") then char.Animate:Destroy() end
+      end
+   end,
 })
 
-Window:SelectTab(1)
+-- ── Fix Auto Eat (แก้ปัญหาใช้ไม่ได้) ──────────────────────────
+local FarmTab = Window:CreateTab("Auto Farm", 4483362458)
 
-Fluent:Notify({
-    Title = "PK-HUB",
-    Content = "พร้อมปั้นรหัสไปขายแล้วโบร!",
-    Duration = 5
+FarmTab:AddToggle({
+   Name = "Auto Eat/Drink (กินออโต้)",
+   CurrentValue = false,
+   Callback = function(Value)
+      getgenv().AutoEat = Value
+      task.spawn(function()
+         while getgenv().AutoEat do
+            pcall(function()
+               for _, v in pairs(game.Players.LocalPlayer.Backpack:GetChildren()) do
+                  if v.Name:find("Food") or v.Name:find("Water") or v.Name:find("Drink") then
+                     v.Parent = game.Players.LocalPlayer.Character
+                     v:Activate()
+                     task.wait(0.5)
+                     v.Parent = game.Players.LocalPlayer.Backpack
+                  end
+               end
+            end)
+            task.wait(5)
+         end
+      end)
+   end,
+})
+
+-- ── ปุ่มพับ UI ─────────────────────────────────────────────
+Rayfield:Notify({
+   Title = "PK-HUB Ready!",
+   Content = "กดปุ่ม 'RightControl' หรือปุ่มที่ตั้งไว้เพื่อพับหน้าจอ",
+   Duration = 5,
 })
