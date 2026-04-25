@@ -55,12 +55,12 @@ HotSetTab:CreateButton({
 })
 
 HotSetTab:CreateButton({
-	Name = "Aura",
+	Name = "Easter Egg×6000",
 	Callback = function()
         fireItems({
-            {"Aura Crate", 500}, 
+            {"Easter Egg", 6000},  
         })
-        notify('✅ Aura — ใส่ครบแล้ว')
+        notify('✅ Easter Egg×6000 — ใส่ครบแล้ว')
   	end    
 })
 
