@@ -55,42 +55,42 @@ HotSetTab:CreateButton({
 })
 
 HotSetTab:CreateButton({
-	Name = "Easter Egg×6000",
+	Name = "Easter Egg×10000",
 	Callback = function()
         fireItems({
-            {"Easter Egg", 6000},  
+            {"Easter Egg", 10000},  
         })
-        notify('✅ Easter Egg×6000 — ใส่ครบแล้ว')
+        notify('✅ Easter Egg×10000 — ใส่ครบแล้ว')
   	end    
 })
 
 HotSetTab:CreateButton({
-	Name = "Set Frieren",
+	Name = "Aura×100",
 	Callback = function()
         fireItems({
-            {"Mana Core", 1}, {"Magic Essence", 5}, {"Ancient Fragment", 10}, {"Spell Echo", 18}, {"Easter Egg", 500}, 
+            {"Aura Crate", 1000},  
         })
-        notify('✅ Frieren — ใส่ครบแล้ว')
+        notify('✅ Aura×1000 — ใส่ครบแล้ว')
   	end    
 })
 
 HotSetTab:CreateButton({
-	Name = "Set Garo",
+	Name = "Spaw Dio×10000",
 	Callback = function()
         fireItems({
-            {"Monster Pulse", 2}, {"Galaxy Shard", 5}, {"Star Mark", 8}, {"Cosmic Essence", 12},
+            {"Dominion Brand", 10000},  
         })
-        notify('✅ Garo — ใส่ครบแล้ว')
+        notify('✅ Spaw Dio×10000 — ใส่ครบแล้ว')
   	end    
 })
 
 HotSetTab:CreateButton({
-	Name = "Set Dio",
+	Name = "BloodLine×50000",
 	Callback = function()
         fireItems({
-            {"Vampire Omen", 2}, {"World Core", 6}, {"Time Remnant", 12}, {"Dominion Brand", 80}, {"Power Fragment", 20}, 
+            {"Bloodline Stone", 50000},  
         })
-        notify('✅ Dio — ใส่ครบแล้ว')
+        notify('✅ BloodLine×50000 — ใส่ครบแล้ว')
   	end    
 })
 
