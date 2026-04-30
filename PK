@@ -55,22 +55,22 @@ HotSetTab:CreateButton({
 })
 
 HotSetTab:CreateButton({
-	Name = "Easter Egg×10000",
+	Name = "Set Garo",
 	Callback = function()
         fireItems({
-            {"Easter Egg", 10000},  
+            {"Monster Pulse", 2}, {"Galaxy Shard", 5}, {"Star Mark", 8}, {"Cosmic Essence", 12}, 
         })
-        notify('✅ Easter Egg×10000 — ใส่ครบแล้ว')
+        notify('✅ Garo — ใส่ครบแล้ว')
   	end    
 })
 
 HotSetTab:CreateButton({
-	Name = "Aura×100",
+	Name = "Aura×500",
 	Callback = function()
         fireItems({
-            {"Aura Crate", 1000},  
+            {"Aura Crate", 500},  
         })
-        notify('✅ Aura×1000 — ใส่ครบแล้ว')
+        notify('✅ Aura×500 — ใส่ครบแล้ว')
   	end    
 })
 
@@ -81,16 +81,6 @@ HotSetTab:CreateButton({
             {"Dominion Brand", 10000},  
         })
         notify('✅ Spaw Dio×10000 — ใส่ครบแล้ว')
-  	end    
-})
-
-HotSetTab:CreateButton({
-	Name = "BloodLine×50000",
-	Callback = function()
-        fireItems({
-            {"Bloodline Stone", 50000},  
-        })
-        notify('✅ BloodLine×50000 — ใส่ครบแล้ว')
   	end    
 })
 
