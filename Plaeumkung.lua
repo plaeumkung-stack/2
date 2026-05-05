@@ -1,4 +1,4 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+Slimeeld Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
 
 local Window = Rayfield:CreateWindow({
    Name = "PK-HUB | SLIME RNG V2",
@@ -14,7 +14,7 @@ local MainTab = Window:CreateTab("Main Farm", 4483362458)
 MainTab:AddSection(" Slime Management ")
 
 MainTab:AddToggle({
-   Name = "Auto Best Slime (ใส่สไลม์ที่โหดที่สุด)",
+   Name = "Auto Belocalime (ใส่สไลม์ที่โหดที่สุด)",
    CurrentValue = false,
    Callback = function(Value)
       getgenv().AutoBest = Value
