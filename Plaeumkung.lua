@@ -1,106 +1,114 @@
-local Rayfield = loadstring(game:HttpGet('https://sirius.menu/rayfield'))()
+local Fluent = loadstring(game:HttpGet("https://github.com/dawid-scripts/Fluent/releases/latest/download/main.lua"))()
 
-local Window = Rayfield:CreateWindow({
-   Name = "PK-HUB | SLIME RNG PRO",
-   LoadingTitle = "Slime RNG Wiki-Edition",
-   LoadingSubtitle = "by Plaeumkung",
-   ConfigurationSaving = { Enabled = false },
-   KeySystem = false,
+local Window = Fluent:CreateWindow({
+    Title = "PK-HUB | SLIME RNG PRO",
+    SubTitle = "by Plaeumkung",
+    TabWidth = 160,
+    Size = UDim2.fromOffset(580, 460),
+    Acrylic = false,
+    Theme = "Dark",
+    MinimizeKey = Enum.KeyCode.LeftControl
 })
 
-local MainTab = Window:CreateTab("Auto Farm", 4483362458)
+-- [[ สร้าง Tab ให้ชัดเจน ]] --
+local Tabs = {
+    Main = Window:AddTab({ Title = "Auto Farm", Icon = "home" }),
+    Misc = Window:AddTab({ Title = "Misc", Icon = "settings" })
+}
 
--- [[ 1. AUTO ROLL & AUTO POTION ]] --
-MainTab:AddToggle({
-   Name = "Infinite Roll (สุ่มไม่หยุด)",
-   CurrentValue = false,
-   Callback = function(Value)
-      getgenv().Rolling = Value
-      task.spawn(function()
-         while getgenv().Rolling do
+local Options = Fluent.Options
+
+-- ── ฟังก์ชันหลัก: AUTO ROLL ──────────────────────────────────
+Tabs.Main:AddToggle("AutoRoll", {Title = "Auto Roll (สุ่มรัวๆ)", Default = false})
+
+task.spawn(function()
+    while true do
+        if Options.AutoRoll and Options.AutoRoll.Value then
             pcall(function()
                 game:GetService("ReplicatedStorage").Events.Roll:FireServer()
             end)
-            task.wait(0.05)
-         end
-      end)
-   end,
-})
+        end
+        task.wait(0.1)
+    end
+end)
 
--- [[ 2. WIKI ITEM MAGNET (ดูดของดรอป) ]] --
-MainTab:AddToggle({
-   Name = "Item Magnet (ดูดแอปเปิ้ล/แครอท/โพชั่น)",
-   CurrentValue = false,
-   Callback = function(Value)
-      getgenv().Magnet = Value
-      task.spawn(function()
-         while getgenv().Magnet do
+-- ── ฟังก์ชันหลัก: ITEM MAGNET (ดูดของแอปเปิ้ล/แครอท) ───────────────
+Tabs.Main:AddToggle("ItemMagnet", {Title = "Item Magnet (ดูดของรอบตัว)", Default = false})
+
+task.spawn(function()
+    while true do
+        if Options.ItemMagnet and Options.ItemMagnet.Value then
             pcall(function()
-                local char = game.Players.LocalPlayer.Character
-                -- เช็กโฟลเดอร์ไอเทมตามข้อมูล Wiki
-                local itemFolders = {workspace:FindFirstChild("Items"), workspace:FindFirstChild("SpawnedItems"), workspace}
-                for _, folder in pairs(itemFolders) do
-                    if folder then
-                        for _, v in pairs(folder:GetChildren()) do
-                            -- กรองเอาเฉพาะไอเทมที่ใช้ได้ (Apple, Carrot, Potion)
-                            if v:IsA("Tool") or v:FindFirstChild("Handle") or v:IsA("BasePart") then
-                                if v.Name:find("Apple") or v.Name:find("Carrot") or v.Name:find("Potion") or v.Name:find("Luck") then
-                                    v.CFrame = char.HumanoidRootPart.CFrame
-                                end
+                local hrp = game.Players.LocalPlayer.Character.HumanoidRootPart
+                local items = {"Apple", "Carrot", "Potion", "Luck", "Speed", "Banana"}
+                
+                for _, v in pairs(workspace:GetDescendants()) do
+                    if v:IsA("TouchTransmitter") and v.Parent then
+                        for _, name in pairs(items) do
+                            if v.Parent.Name:find(name) then
+                                v.Parent.CFrame = hrp.CFrame
                             end
                         end
                     end
                 end
             end)
-            task.wait(1)
-         end
-      end)
-   end,
-})
+        end
+        task.wait(1.5)
+    end
+end)
 
--- [[ 3. AUTO USE POTIONS (กดใช้ยาอัตโนมัติ) ]] --
-MainTab:AddToggle({
-   Name = "Auto Use Potions (กดใช้ยาทันที)",
-   CurrentValue = false,
-   Callback = function(Value)
-      getgenv().AutoUse = Value
-      task.spawn(function()
-         while getgenv().AutoUse do
+-- ── ฟังก์ชันรอง: AUTO POTION ────────────────────────────────
+Tabs.Main:AddToggle("AutoPotion", {Title = "Auto Use Potions (กดใช้ยาออโต้)", Default = false})
+
+task.spawn(function()
+    while true do
+        if Options.AutoPotion and Options.AutoPotion.Value then
             pcall(function()
-               local bp = game.Players.LocalPlayer.Backpack
-               for _, p in pairs(bp:GetChildren()) do
-                  if p.Name:find("Potion") or p.Name:find("Luck") then
-                     p.Parent = game.Players.LocalPlayer.Character
-                     task.wait(0.1)
-                     p:Activate()
-                     task.wait(0.1)
-                     p.Parent = bp
-                  end
-               end
+                local bp = game.Players.LocalPlayer.Backpack
+                for _, item in pairs(bp:GetChildren()) do
+                    if item.Name:find("Potion") or item.Name:find("Luck") then
+                        item.Parent = game.Players.LocalPlayer.Character
+                        task.wait(0.2)
+                        item:Activate()
+                        task.wait(0.2)
+                        item.Parent = bp
+                    end
+                end
             end)
-            task.wait(2)
-         end
-      end)
-   end,
+        end
+        task.wait(3)
+    end
+end)
+
+-- ── ฟังก์ชันจิปาถะ ──────────────────────────────────────────
+Tabs.Misc:AddSlider("WalkSpeed", {
+    Title = "Speed Hack",
+    Default = 16,
+    Min = 16,
+    Max = 150,
+    Rounding = 1,
+    Callback = function(Value)
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = Value
+    end
 })
 
--- [[ MISC & UTILS ]] --
-local MiscTab = Window:CreateTab("Misc", 4483362458)
-
-MiscTab:AddButton({
-   Name = "Anti-AFK",
-   Callback = function()
-      local vu = game:GetService("VirtualUser")
-      game:GetService("Players").LocalPlayer.Idled:Connect(function()
-         vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
-         task.wait(1)
-         vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
-      end)
-   end,
+Tabs.Misc:AddButton({
+    Title = "Anti-AFK (กันหลุด)",
+    Callback = function()
+        local vu = game:GetService("VirtualUser")
+        game:GetService("Players").LocalPlayer.Idled:Connect(function()
+            vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+            task.wait(1)
+            vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+        end)
+    end
 })
 
-MiscTab:AddSlider({
-   Name = "WalkSpeed",
-   Min = 16, Max = 200, Default = 16, Increment = 1,
-   Callback = function(v) game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v end
+-- บังคับเลือก Tab แรกตอนเปิด
+Window:SelectTab(1)
+
+Fluent:Notify({
+    Title = "PK-HUB Loaded",
+    Content = "ฟังก์ชันมาครบแล้วโบร! ถ้าไม่เห็นให้ลองกด Tab 'Auto Farm' ดู",
+    Duration = 5
 })
