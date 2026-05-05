@@ -1,77 +1,131 @@
--- PK-HUB VERSION ประหยัดทรัพยากร (รันติดง่ายที่สุด)
+-- [[ PK-HUB CUSTOM ENGINE - NO LIBRARY VERSION ]] --
 local ScreenGui = Instance.new("ScreenGui")
 local MainFrame = Instance.new("Frame")
+local UICorner = Instance.new("UICorner")
 local Title = Instance.new("TextLabel")
-local AutoRollBtn = Instance.new("TextButton")
-local MagnetBtn = Instance.new("TextButton")
+local Container = Instance.new("ScrollingFrame")
+local UIListLayout = Instance.new("UIListLayout")
 
-ScreenGui.Parent = game.CoreGui
-ScreenGui.Name = "PK_SimpleUI"
+-- Setup UI หลัก (ป้องกันการโหลดไม่ขึ้น)
+ScreenGui.Parent = game:GetService("CoreGui")
+ScreenGui.Name = "PK_HUB_V3"
 
 MainFrame.Name = "MainFrame"
 MainFrame.Parent = ScreenGui
-MainFrame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-MainFrame.Position = UDim2.new(0.5, -100, 0.5, -75)
-MainFrame.Size = UDim2.new(0, 200, 0, 200)
+MainFrame.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
+MainFrame.Position = UDim2.new(0.5, -125, 0.5, -150)
+MainFrame.Size = UDim2.new(0, 250, 0, 300)
 MainFrame.Active = true
-MainFrame.Draggable = true -- ลากหน้าจอได้
+MainFrame.Draggable = true -- ลากหน้าจอได้บนมือถือ
+
+UICorner.Parent = MainFrame
 
 Title.Parent = MainFrame
-Title.Size = UDim2.new(1, 0, 0, 30)
-Title.Text = "PK-HUB SIMPLE"
-Title.TextColor3 = Color3.fromRGB(255, 255, 0)
-Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Title.Size = UDim2.new(1, 0, 0, 40)
+Title.Text = "PK-HUB | SLIME RNG"
+Title.TextColor3 = Color3.fromRGB(255, 255, 255)
+Title.BackgroundColor3 = Color3.fromRGB(40, 40, 40)
+Title.TextSize = 18
+Title.Font = Enum.Font.SourceSansBold
 
--- ปุ่ม Auto Roll
-AutoRollBtn.Name = "AutoRoll"
-AutoRollBtn.Parent = MainFrame
-AutoRollBtn.Position = UDim2.new(0.1, 0, 0.25, 0)
-AutoRollBtn.Size = UDim2.new(0.8, 0, 0, 30)
-AutoRollBtn.Text = "Auto Roll: OFF"
-AutoRollBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-AutoRollBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+Container.Parent = MainFrame
+Container.Position = UDim2.new(0, 5, 0, 45)
+Container.Size = UDim2.new(1, -10, 1, -50)
+Container.BackgroundTransparency = 1
+Container.ScrollBarThickness = 4
 
-local rolling = false
-AutoRollBtn.MouseButton1Click:Connect(function()
-    rolling = not rolling
-    AutoRollBtn.Text = "Auto Roll: " .. (rolling and "ON" or "OFF")
+UIListLayout.Parent = Container
+UIListLayout.Padding = UDim.new(0, 5)
+UIListLayout.HorizontalAlignment = Enum.HorizontalAlignment.Center
+
+-- [[ ฟังก์ชันสร้างปุ่มแบบรวดเร็ว ]] --
+local function CreateToggleButton(name, callback)
+    local Button = Instance.new("TextButton")
+    local state = false
+    
+    Button.Size = UDim2.new(0.9, 0, 0, 35)
+    Button.Parent = Container
+    Button.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
+    Button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    Button.Text = name .. " : OFF"
+    Button.Font = Enum.Font.SourceSans
+    Button.TextSize = 16
+    
+    local Corner = Instance.new("UICorner")
+    Corner.CornerRadius = UDim.new(0, 6)
+    Corner.Parent = Button
+
+    Button.MouseButton1Click:Connect(function()
+        state = not state
+        Button.Text = name .. " : " .. (state and "ON" or "OFF")
+        Button.BackgroundColor3 = state and Color3.fromRGB(0, 150, 0) or Color3.fromRGB(60, 60, 60)
+        callback(state)
+    end)
+end
+
+-- [[ 1. AUTO ROLL ]] --
+CreateToggleButton("Auto Roll", function(v)
+    getgenv().Rolling = v
     task.spawn(function()
-        while rolling do
+        while getgenv().Rolling do
             pcall(function() game:GetService("ReplicatedStorage").Events.Roll:FireServer() end)
             task.wait(0.1)
         end
     end)
 end)
 
--- ปุ่ม Magnet
-MagnetBtn.Name = "Magnet"
-MagnetBtn.Parent = MainFrame
-MagnetBtn.Position = UDim2.new(0.1, 0, 0.5, 0)
-MagnetBtn.Size = UDim2.new(0.8, 0, 0, 30)
-MagnetBtn.Text = "Magnet: OFF"
-MagnetBtn.BackgroundColor3 = Color3.fromRGB(60, 60, 60)
-MagnetBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-
-local mag = false
-MagnetBtn.MouseButton1Click:Connect(function()
-    mag = not mag
-    MagnetBtn.Text = "Magnet: " .. (mag and "ON" or "OFF")
+-- [[ 2. ITEM MAGNET (WIKI ITEMS) ]] --
+CreateToggleButton("Item Magnet", function(v)
+    getgenv().Magnet = v
     task.spawn(function()
-        while mag do
+        while getgenv().Magnet do
             pcall(function()
                 local hrp = game.Players.LocalPlayer.Character.HumanoidRootPart
-                for _, v in pairs(workspace:GetDescendants()) do
-                    if v:IsA("TouchTransmitter") and v.Parent then
-                        local n = v.Parent.Name
-                        if n:find("Apple") or n:find("Carrot") or n:find("Potion") then
-                            v.Parent.CFrame = hrp.CFrame
+                local items = {"Apple", "Carrot", "Potion", "Luck", "Speed"}
+                for _, obj in pairs(workspace:GetDescendants()) do
+                    if obj:IsA("TouchTransmitter") and obj.Parent then
+                        for _, name in pairs(items) do
+                            if obj.Parent.Name:find(name) then
+                                obj.Parent.CFrame = hrp.CFrame
+                            end
                         end
                     end
                 end
             end)
-            task.wait(1)
+            task.wait(1.5)
         end
     end)
 end)
 
-print("PK-HUB Simple Loaded!")
+-- [[ 3. AUTO EQUIP BEST ]] --
+CreateToggleButton("Auto Best Slime", function(v)
+    getgenv().AutoBest = v
+    task.spawn(function()
+        while getgenv().AutoBest do
+            pcall(function() game:GetService("ReplicatedStorage").Events.EquipBest:FireServer() end)
+            task.wait(5)
+        end
+    end)
+end)
+
+-- [[ 4. SPEED HACK ]] --
+CreateToggleButton("Speed Hack (100)", function(v)
+    if v then
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 100
+    else
+        game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = 16
+    end
+end)
+
+-- [[ 5. ANTI-AFK ]] --
+local function AntiAFK()
+    local vu = game:GetService("VirtualUser")
+    game:GetService("Players").LocalPlayer.Idled:Connect(function()
+        vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+        task.wait(1)
+        vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
+    end)
+end
+AntiAFK()
+
+print("PK-HUB V3 LOADED SUCCESSFULLY")
