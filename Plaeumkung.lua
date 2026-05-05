@@ -1,17 +1,17 @@
--- [[ PK-HUB | SLIME RNG (Stouts Studio) | DELTA VERSION ]] --
+-- [[ PK-HUB | SLIME RNG (PRO FARMER) | DELTA & MOBILE ]] --
 local ScreenGui = Instance.new("ScreenGui")
-local Frame = Instance.new("Frame")
+local Main = Instance.new("Frame")
 local UIList = Instance.new("UIListLayout")
 
 ScreenGui.Parent = game:GetService("CoreGui")
-Frame.Parent = ScreenGui
-Frame.BackgroundColor3 = Color3.fromRGB(30, 30, 30)
-Frame.Position = UDim2.new(0.5, -90, 0.5, -110)
-Frame.Size = UDim2.new(0, 180, 0, 220)
-Frame.Active = true
-Frame.Draggable = true
+Main.Parent = ScreenGui
+Main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Main.Position = UDim2.new(0.5, -95, 0.5, -100)
+Main.Size = UDim2.new(0, 190, 0, 200)
+Main.Active = true
+Main.Draggable = true
 
-UIList.Parent = Frame
+UIList.Parent = Main
 UIList.Padding = UDim.new(0, 5)
 UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
@@ -19,82 +19,83 @@ local function CreateBtn(txt, callback)
     local b = Instance.new("TextButton")
     local active = false
     b.Size = UDim2.new(0.9, 0, 0, 35)
-    b.Parent = Frame
+    b.Parent = Main
     b.Text = txt .. ": OFF"
-    b.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    b.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
     b.TextColor3 = Color3.fromRGB(255, 255, 255)
     
     b.MouseButton1Click:Connect(function()
         active = not active
         b.Text = txt .. ": " .. (active and "ON" or "OFF")
-        b.BackgroundColor3 = active and Color3.fromRGB(0, 180, 0) or Color3.fromRGB(50, 50, 50)
+        b.BackgroundColor3 = active and Color3.fromRGB(0, 150, 255) or Color3.fromRGB(45, 45, 45)
         callback(active)
     end)
 end
 
--- 1. AUTO ROLL (แมพนี้ใช้ Remote ในระบบ Network)
-CreateBtn("Auto Roll", function(v)
-    getgenv().Rolling = v
+-- 1. AUTO EQUIP BEST (ใส่สไลม์ที่โหดที่สุดให้อัตโนมัติ)
+CreateBtn("Auto Equip Best", function(v)
+    getgenv().AutoEquip = v
     task.spawn(function()
-        while getgenv().Rolling do
+        while getgenv().AutoEquip do
             pcall(function()
-                -- แมพของ Stouts Studio มักจะซ่อน Remote ไว้ในโฟลเดอร์ Remotes หรือใช้ชื่อ Network
-                local remote = game:GetService("ReplicatedStorage"):FindFirstChild("Roll", true) or 
-                               game:GetService("ReplicatedStorage"):FindFirstChild("Click", true)
-                if remote and remote:IsA("RemoteEvent") then
+                -- ส่งคำสั่งสวมใส่ตัวที่ดีที่สุดไปยังระบบของแมพ Stouts Studio
+                local remote = game:GetService("ReplicatedStorage"):FindFirstChild("EquipBest", true)
+                if remote then
                     remote:FireServer()
                 end
             end)
-            task.wait(0.1)
+            task.wait(5) -- เช็กทุกๆ 5 วินาที
         end
     end)
 end)
 
--- 2. ITEM MAGNET (แอปเปิ้ล, ยา, แครอท)
-CreateBtn("Magnet", function(v)
-    getgenv().Mag = v
+-- 2. ITEM TP & MAGNET (วาร์ปเก็บไอเทมดรอป: Apple, Carrot, Potion, Goop)
+CreateBtn("TP to Items", function(v)
+    getgenv().TPItem = v
     task.spawn(function()
-        while getgenv().Mag do
+        while getgenv().TPItem do
             pcall(function()
                 local hrp = game.Players.LocalPlayer.Character.HumanoidRootPart
-                -- กวาดไอเทมจากโฟลเดอร์ของแมพ Stouts Studio
+                -- รายชื่อไอเทมตาม Wiki (Goop, Apple, Carrot, Potion, Luck)
                 for _, obj in pairs(workspace:GetDescendants()) do
                     if obj:IsA("TouchTransmitter") and obj.Parent then
                         local n = obj.Parent.Name:lower()
-                        if n:find("apple") or n:find("carrot") or n:find("potion") or n:find("luck") or n:find("slime") then
-                            obj.Parent.CFrame = hrp.CFrame
+                        if n:find("goop") or n:find("apple") or n:find("carrot") or n:find("potion") or n:find("luck") then
+                            -- วาร์ปไปหาไอเทมโดยตรง
+                            hrp.CFrame = obj.Parent.CFrame
+                            task.wait(0.1)
                         end
                     end
                 end
             end)
-            task.wait(0.8)
+            task.wait(1)
         end
     end)
 end)
 
--- 3. AUTO EQUIP BEST (ใส่สไลม์โหดสุด)
-CreateBtn("Auto Best", function(v)
-    getgenv().Best = v
+-- 3. MOB TELEPORT (วาร์ปไปหามอนสเตอร์เพื่อฟาร์มเลเวล/เงิน)
+CreateBtn("TP to Monsters", function(v)
+    getgenv().TPMob = v
     task.spawn(function()
-        while getgenv().Best do
+        while getgenv().TPMob do
             pcall(function()
-                local equip = game:GetService("ReplicatedStorage"):FindFirstChild("EquipBest", true)
-                if equip then equip:FireServer() end
+                local hrp = game.Players.LocalPlayer.Character.HumanoidRootPart
+                -- สแกนหามอนสเตอร์ในแมพ (Enemy/Monster)
+                for _, mob in pairs(workspace:GetChildren()) do
+                    if mob:FindFirstChild("Humanoid") and mob:FindFirstChild("HumanoidRootPart") and mob.Name ~= game.Players.LocalPlayer.Name then
+                        -- วาร์ปไปข้างหลังมอนสเตอร์
+                        hrp.CFrame = mob.HumanoidRootPart.CFrame * CFrame.new(0, 0, 3)
+                        task.wait(0.5)
+                        if not getgenv().TPMob then break end
+                    end
+                end
             end)
-            task.wait(5)
+            task.wait(0.5)
         end
     end)
 end)
 
--- 4. SPEED (Delta รองรับตัวนี้ดีที่สุด)
+-- 4. SPEED HACK
 CreateBtn("Speed 100", function(v)
     game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v and 100 or 16
-end)
-
--- ANTI-AFK (กันหลุด)
-local vu = game:GetService("VirtualUser")
-game:GetService("Players").LocalPlayer.Idled:Connect(function()
-    vu:Button2Down(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
-    task.wait(1)
-    vu:Button2Up(Vector2.new(0,0),workspace.CurrentCamera.CFrame)
 end)
