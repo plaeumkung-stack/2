@@ -1,141 +1,122 @@
-task.wait(1)
-local TeleportService = game:GetService("TeleportService")
 local Players = game:GetService("Players")
-local LocalPlayer = Players.LocalPlayer or Players.PlayerAdded:Wait()
+local TweenService = game:GetService("TweenService")
+local RunService = game:GetService("RunService")
+local GuiService = game:GetService("GuiService")
+local VirtualInputManager = game:GetService("VirtualInputManager")
+local TPService = game:GetService("TeleportService")
 
-local PLACE_A = 13775256536
-local PLACE_B = 93712201161812
-local PLACE_C = 131703399727686
+local player = Players.LocalPlayer
+local playerGui = player:WaitForChild("PlayerGui")
+local targetName = "PLAEUMKUNG_GG" --ชื่่อที่อยากจะเทรด
+local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Linear)
 
-local function runPlaceA()
-	while true do
-		if game.PlaceId ~= PLACE_A then break end
-
-		if game.PlaceId ~= PLACE_B then
-			TeleportService:Teleport(PLACE_B, LocalPlayer)
-		end
-
-		task.wait(5)
-	end
+local function Rejoin()
+    TPService:Teleport(game.PlaceId, player)
 end
 
-local function runPlaceB()
-	local GuiService = game:GetService("GuiService")
-	local VirtualInputManager = game:GetService("VirtualInputManager")
-
-	local targets = {
-		workspace.Lifts:GetChildren()[16],
-		workspace.Lifts.ToiletHQ,
-		workspace.Lifts:GetChildren()[12],
-		workspace.Lifts:GetChildren()[15],
-	}
-
-	local function teleportToModelGround(model)
-		local character = LocalPlayer.Character or LocalPlayer.CharacterAdded:Wait()
-		local hrp = character:WaitForChild("HumanoidRootPart")
-
-		local offsetHeight = 3
-
-		if model:IsA("Model") then
-			local cf, size = model:GetBoundingBox()
-			local groundY = cf.Position.Y - (size.Y / 2)
-			hrp.CFrame = CFrame.new(cf.Position.X, groundY + offsetHeight, cf.Position.Z)
-		elseif model:IsA("BasePart") then
-			local groundY = model.Position.Y - (model.Size.Y / 2)
-			hrp.CFrame = CFrame.new(model.Position.X, groundY + offsetHeight, model.Position.Z)
-		end
-	end
-
-	local function teleportToRandom()
-		local target = targets[math.random(1, #targets)]
-		if target then
-			teleportToModelGround(target)
-		end
-	end
-
-	local function focusAndPressEnter()
-		local gui = LocalPlayer:WaitForChild("PlayerGui")
-		local lobby = gui:WaitForChild("Lobby")
-		local queueFrame = lobby:WaitForChild("QueueFrame")
-
-		local t0 = tick()
-		while not queueFrame.Visible do
-			if tick() - t0 >= 10 then
-				teleportToRandom()
-				task.wait(0.5)
-				focusAndPressEnter()
-				return
-			end
-			task.wait()
-		end
-
-		local startBtn = queueFrame:FindFirstChild("Start")
-		if startBtn then
-			GuiService.SelectedObject = startBtn
-			task.wait(0.2)
-
-			VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-			task.wait()
-			VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-		end
-	end
-
-	teleportToRandom()
-	focusAndPressEnter()
+local function checkItemsLeft()
+    local backpack = player:FindFirstChild("Backpack")
+    local char = player.Character
+    
+    if backpack then
+        for _, tool in ipairs(backpack:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name ~= "Treadmill" then return true end
+        end
+    end
+    if char then
+        for _, tool in ipairs(char:GetChildren()) do
+            if tool:IsA("Tool") and tool.Name ~= "Treadmill" then return true end
+        end
+    end
+    return false
 end
 
-local function runPlaceC()
-	local GuiService = game:GetService("GuiService")
-	local VirtualInputManager = game:GetService("VirtualInputManager")
+local function setupPrompt(v)
+    if v:IsA("ProximityPrompt") then v.HoldDuration = 0 end
+end
+for _, v in ipairs(game:GetDescendants()) do setupPrompt(v) end
+game.DescendantAdded:Connect(setupPrompt)
 
-	local function pressEnter()
-		VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-		task.wait()
-		VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-	end
+local function manageTools()
+    local char = player.Character
+    if not char then return end
+    
+    local isHoldingTool = false
+    for _, tool in ipairs(char:GetChildren()) do
+        if tool:IsA("Tool") and tool.Name ~= "Treadmill" then
+            isHoldingTool = true
+            break
+        end
+    end
 
-	local function autoFlow()
-		local gui = LocalPlayer:WaitForChild("PlayerGui")
-		local match = gui:WaitForChild("Match")
-		local topFrame = match:WaitForChild("TopFrame")
-
-		local skipWave = topFrame:WaitForChild("SkipWave")
-		local autoSkipBtn = topFrame:WaitForChild("AutoSkip"):WaitForChild("OnAndOff")
-
-		while true do
-			if skipWave.Visible then
-				GuiService.SelectedObject = skipWave
-				task.wait(0.2)
-				pressEnter()
-				task.wait(0.2)
-				GuiService.SelectedObject = nil
-			end
-
-			local currentColor = autoSkipBtn.BackgroundColor3
-
-			if currentColor == Color3.fromRGB(255, 0, 0) then
-				GuiService.SelectedObject = autoSkipBtn
-				task.wait(0.2)
-				pressEnter()
-				task.wait(0.2)
-				GuiService.SelectedObject = nil
-			end
-
-			task.wait(0.5)
-		end
-	end
-
-	task.spawn(autoFlow)
+    if not isHoldingTool then
+        local backpack = player:FindFirstChild("Backpack")
+        if backpack then
+            for _, tool in ipairs(backpack:GetChildren()) do
+                if tool:IsA("Tool") and tool.Name ~= "Treadmill" then
+                    tool.Parent = char
+                    break
+                end
+            end
+        end
+    end
 end
 
-
-if game.PlaceId == PLACE_A then
-	runPlaceA()
-
-elseif game.PlaceId == PLACE_B then
-	task.wait(1)
-	runPlaceB()
-
-elseif game.PlaceId == PLACE_C then
-	runPlaceC()
+task.wait(0.5)
+local rf = game:GetService("ReplicatedStorage"):WaitForChild("Functions", 5)
+local setSettingFunc = rf and rf:FindFirstChild("SetSettingFunc")
+if setSettingFunc then
+    setSettingFunc:InvokeServer("BGM", "\255")
 end
+task.wait(0.5)
+print("test dupe")
+
+task.spawn(function()
+    while true do
+        local confirmGui = playerGui:FindFirstChild("Confirm")
+        if confirmGui and confirmGui.Enabled then
+            local btn = confirmGui:FindFirstChild("Main", true) 
+                and confirmGui.Main:FindFirstChild("ConfirmFrame", true) 
+                and confirmGui.Main.ConfirmFrame:FindFirstChild("Btn_Confirm")
+
+            if btn then
+                GuiService.SelectedObject = btn
+                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+                task.wait()
+                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+                GuiService.SelectedObject = nil
+            end
+        end
+        task.wait(0.1)
+    end
+end)
+
+task.spawn(function()
+    while true do
+        if not checkItemsLeft() then
+            Rejoin()
+            break
+        end
+
+        local target = Players:FindFirstChild(targetName)
+        local char = player.Character
+        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+        
+        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and hrp then
+            local targetHRP = target.Character.HumanoidRootPart
+            local targetCFrame = targetHRP.CFrame * CFrame.new(0, 0, 3)
+            
+            local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
+            tween:Play()
+            
+            manageTools()
+            
+            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
+            task.wait()
+            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
+        else
+            task.wait(0.5)
+        end
+        RunService.Heartbeat:Wait()
+    end
+end)
