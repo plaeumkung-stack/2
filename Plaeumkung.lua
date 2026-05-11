@@ -7,7 +7,7 @@ local TPService = game:GetService("TeleportService")
 
 local player = Players.LocalPlayer
 local playerGui = player:WaitForChild("PlayerGui")
-local targetName = "PLAEUMKUNG_GG" --ชื่่อที่อยากจะเทรด
+local targetName = "Shininthesailor" --ชื่่อที่อยากจะเทรด
 local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Linear)
 
 local function Rejoin()
