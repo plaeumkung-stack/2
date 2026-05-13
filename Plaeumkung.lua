@@ -1,122 +1,62 @@
-local Players = game:GetService("Players")
-local TweenService = game:GetService("TweenService")
-local RunService = game:GetService("RunService")
-local GuiService = game:GetService("GuiService")
-local VirtualInputManager = game:GetService("VirtualInputManager")
-local TPService = game:GetService("TeleportService")
+-- [[ PK-HUB | FLY MOD | BE FLASH FOR BRAINROTS ]] --
+local ScreenGui = Instance.new("ScreenGui")
+local Main = Instance.new("Frame")
+local UIList = Instance.new("UIListLayout")
 
-local player = Players.LocalPlayer
-local playerGui = player:WaitForChild("PlayerGui")
-local targetName = "Shininthesailor" --ชื่่อที่อยากจะเทรด
-local tweenInfo = TweenInfo.new(0.15, Enum.EasingStyle.Linear)
+ScreenGui.Parent = game:GetService("CoreGui")
+Main.Parent = ScreenGui
+Main.BackgroundColor3 = Color3.fromRGB(20, 20, 20)
+Main.Position = UDim2.new(0, 10, 0.5, -50)
+Main.Size = UDim2.new(0, 150, 0, 120)
+Main.Active = true
+Main.Draggable = true
 
-local function Rejoin()
-    TPService:Teleport(game.PlaceId, player)
-end
+UIList.Parent = Main
+UIList.Padding = UDim.new(0, 5)
+UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-local function checkItemsLeft()
-    local backpack = player:FindFirstChild("Backpack")
-    local char = player.Character
+local function CreateBtn(txt, callback)
+    local b = Instance.new("TextButton")
+    local active = false
+    b.Size = UDim2.new(0.9, 0, 0, 40)
+    b.Parent = Main
+    b.Text = txt .. ": OFF"
+    b.BackgroundColor3 = Color3.fromRGB(50, 50, 50)
+    b.TextColor3 = Color3.fromRGB(255, 255, 255)
     
-    if backpack then
-        for _, tool in ipairs(backpack:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name ~= "Treadmill" then return true end
-        end
-    end
-    if char then
-        for _, tool in ipairs(char:GetChildren()) do
-            if tool:IsA("Tool") and tool.Name ~= "Treadmill" then return true end
-        end
-    end
-    return false
+    b.MouseButton1Click:Connect(function()
+        active = not active
+        b.Text = txt .. ": " .. (active and "ON" or "OFF")
+        b.BackgroundColor3 = active and Color3.fromRGB(255, 0, 100) or Color3.fromRGB(50, 50, 50)
+        callback(active)
+    end)
 end
 
-local function setupPrompt(v)
-    if v:IsA("ProximityPrompt") then v.HoldDuration = 0 end
-end
-for _, v in ipairs(game:GetDescendants()) do setupPrompt(v) end
-game.DescendantAdded:Connect(setupPrompt)
+-- ระบบบิน (Fly)
+local flySpeed = 50
+local c = game.Players.LocalPlayer.Character or game.Players.LocalPlayer.CharacterAdded:Wait()
+local root = c:WaitForChild("HumanoidRootPart")
+local bodyVel = Instance.new("BodyVelocity")
+local bodyGyro = Instance.new("BodyGyro")
 
-local function manageTools()
-    local char = player.Character
-    if not char then return end
-    
-    local isHoldingTool = false
-    for _, tool in ipairs(char:GetChildren()) do
-        if tool:IsA("Tool") and tool.Name ~= "Treadmill" then
-            isHoldingTool = true
-            break
-        end
-    end
+bodyVel.MaxForce = Vector3.new(0, 0, 0)
+bodyVel.Velocity = Vector3.new(0, 0, 0)
+bodyGyro.MaxTorque = Vector3.new(0, 0, 0)
+bodyGyro.CFrame = root.CFrame
 
-    if not isHoldingTool then
-        local backpack = player:FindFirstChild("Backpack")
-        if backpack then
-            for _, tool in ipairs(backpack:GetChildren()) do
-                if tool:IsA("Tool") and tool.Name ~= "Treadmill" then
-                    tool.Parent = char
-                    break
-                end
-            end
-        end
-    end
-end
-
-task.wait(0.5)
-local rf = game:GetService("ReplicatedStorage"):WaitForChild("Functions", 5)
-local setSettingFunc = rf and rf:FindFirstChild("SetSettingFunc")
-if setSettingFunc then
-    setSettingFunc:InvokeServer("BGM", "\255")
-end
-task.wait(0.5)
-print("test dupe")
-
-task.spawn(function()
-    while true do
-        local confirmGui = playerGui:FindFirstChild("Confirm")
-        if confirmGui and confirmGui.Enabled then
-            local btn = confirmGui:FindFirstChild("Main", true) 
-                and confirmGui.Main:FindFirstChild("ConfirmFrame", true) 
-                and confirmGui.Main.ConfirmFrame:FindFirstChild("Btn_Confirm")
-
-            if btn then
-                GuiService.SelectedObject = btn
-                VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
-                task.wait()
-                VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
-                GuiService.SelectedObject = nil
-            end
-        end
-        task.wait(0.1)
-    end
-end)
-
-task.spawn(function()
-    while true do
-        if not checkItemsLeft() then
-            Rejoin()
-            break
-        end
-
-        local target = Players:FindFirstChild(targetName)
-        local char = player.Character
-        local hrp = char and char:FindFirstChild("HumanoidRootPart")
+CreateBtn("Fly Mod", function(v)
+    getgenv().Flying = v
+    if v then
+        bodyVel.Parent = root
+        bodyGyro.Parent = root
+        bodyVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
+        bodyGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
         
-        if target and target.Character and target.Character:FindFirstChild("HumanoidRootPart") and hrp then
-            local targetHRP = target.Character.HumanoidRootPart
-            local targetCFrame = targetHRP.CFrame * CFrame.new(0, 0, 3)
-            
-            local tween = TweenService:Create(hrp, tweenInfo, {CFrame = targetCFrame})
-            tween:Play()
-            
-            manageTools()
-            
-            VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.E, false, game)
-            task.wait()
-            VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.E, false, game)
-        else
-            task.wait(0.5)
-        end
-        RunService.Heartbeat:Wait()
-    end
-end)
+        task.spawn(function()
+            while getgenv().Flying do
+                local cam = workspace.CurrentCamera.CFrame
+                local moveDir = Vector3.new(0, 0, 0)
+                
+                -- ใช้ทิศทางกล้องในการบินบนมือถือ
+                body
+                        
