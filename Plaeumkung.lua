@@ -1,4 +1,4 @@
--- [[ PK-HUB | WIZARD ALCHEMY | FIXED AUTO CAST ]] --
+-- [[ PK-HUB | WIZARD ALCHEMY | REMOTE ATTACK ]] --
 local ScreenGui = Instance.new("ScreenGui")
 local Main = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
@@ -7,7 +7,7 @@ local UIList = Instance.new("UIListLayout")
 ScreenGui.Parent = game:GetService("CoreGui")
 Main.Parent = ScreenGui
 Main.BackgroundColor3 = Color3.fromRGB(20, 15, 30)
-Main.Position = UDim2.new(0, 15, 0.5, -60)
+Main.Position = UDim2.new(0, 10, 0.5, -60)
 Main.Size = UDim2.new(0, 160, 0, 130)
 Main.Active = true
 Main.Draggable = true
@@ -40,44 +40,52 @@ local function CreateBtn(txt, callback)
     end)
 end
 
--- 1. AUTO CAST (สั่งเปิดปุ่ม Auto Cast สีดำในเกมให้เอง และกดใช้ไม้คทาออโต้)
+-- 1. AUTO ATTACK (ยิงคำสั่งโจมตีจากตัวคทาโดยตรง)
 CreateBtn("Auto Attack", function(v)
     getgenv().AutoWizard = v
     task.spawn(function()
         while getgenv().AutoWizard do
             pcall(function()
-                local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+                local player = game.Players.LocalPlayer
+                local char = player.Character
                 
-                -- ส่วนที่ 1: ควานหาปุ่ม Auto Cast ในหน้าจอเกมแล้วสั่งเปิดใช้งาน
-                for _, btn in pairs(playerGui:GetDescendants()) do
-                    if btn:IsA("TextButton") and (btn.Name:lower():find("cast") or btn.Text:lower():find("cast")) then
-                        firesignal(btn.MouseButton1Click)
-                        firesignal(btn.Activated)
-                    end
-                end
-                
-                -- ส่วนที่ 2: สั่งให้ตัวละครถืออาวุธและกดยิงสกิลจากคทาในช่องสล็อต
-                local char = game.Players.LocalPlayer.Character
-                local tool = char:FindFirstChildOfClass("Tool") or game.Players.LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
+                -- ตรวจสอบคทาในมือหรือในกระเป๋า
+                local tool = char:FindFirstChildOfClass("Tool") or player.Backpack:FindFirstChildOfClass("Tool")
                 
                 if tool then
                     if tool.Parent ~= char then
-                        tool.Parent = char -- เอาคทามาถือไว้ในมือ
+                        tool.Parent = char -- สั่งควักคทาออกมาถือ
                     end
-                    tool:Activate() -- สั่งยิงเวทมนตร์ออกไป
+                    
+                    -- ค้นหาระบบส่งคำสั่งยิงเวท (Remote) ที่ซ่อนอยู่ในคทา
+                    local remote = tool:FindFirstChildOfClass("RemoteEvent") or tool:FindFirstChildOfClass("RemoteFunction") or tool:FindFirstChild("Remote")
+                    
+                    if remote then
+                        if remote:IsA("RemoteEvent") then
+                            remote:FireServer() -- ยิงเวทมนตร์ออกไปหลังบ้านเลย!
+                        elseif remote:IsA("RemoteFunction") then
+                            remote:InvokeServer()
+                        end
+                    else
+                        -- ถ้าหาในคทาไม่เจอ ให้ยิงคำสั่งเซิร์ฟเวอร์หลักของเกม
+                        local sharedRemote = game:GetService("ReplicatedStorage"):FindFirstChild("Cast", true) or game:GetService("ReplicatedStorage"):FindFirstChild("Attack", true)
+                        if sharedRemote and sharedRemote:IsA("RemoteEvent") then
+                            sharedRemote:FireServer()
+                        end
+                    end
                 end
             end)
-            task.wait(0.2) -- ความเร็วในการสับสกิลและยิงเวท
+            task.wait(0.1) -- สับเวทรัวๆ 0.1 วิ
         end
     end)
 end)
 
--- 2. SPEED 100 (แถมปุ่มวิ่งไวให้ไปทำเควสท์ Lombard ง่ายขึ้น)
+-- 2. SPEED 100
 CreateBtn("Speed 100", function(v)
     game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v and 100 or 16
 end)
 
--- Anti AFK กันเด้งออกจากเซิร์ฟเวอร์
+-- Anti AFK
 local vu = game:GetService("VirtualUser")
 game:GetService("Players").LocalPlayer.Idled:Connect(function()
     vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
