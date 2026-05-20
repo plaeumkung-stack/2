@@ -1,4 +1,4 @@
--- [[ PK-HUB | WIZARD ALCHEMY | AUTO ATTACK ]] --
+-- [[ PK-HUB | WIZARD ALCHEMY | FIXED AUTO CAST ]] --
 local ScreenGui = Instance.new("ScreenGui")
 local Main = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
@@ -6,7 +6,7 @@ local UIList = Instance.new("UIListLayout")
 
 ScreenGui.Parent = game:GetService("CoreGui")
 Main.Parent = ScreenGui
-Main.BackgroundColor3 = Color3.fromRGB(20, 15, 30) -- ธีมพ่อมดม่วงๆ ดำๆ
+Main.BackgroundColor3 = Color3.fromRGB(20, 15, 30)
 Main.Position = UDim2.new(0, 15, 0.5, -60)
 Main.Size = UDim2.new(0, 160, 0, 130)
 Main.Active = true
@@ -21,8 +21,6 @@ Title.BackgroundColor3 = Color3.fromRGB(40, 30, 60)
 UIList.Parent = Main
 UIList.Padding = UDim.new(0, 5)
 UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
-
-local attackSpeed = 0.1 -- ความเร็วเริ่มต้น (0.1 วินาทีต่อครั้ง)
 
 local function CreateBtn(txt, callback)
     local b = Instance.new("TextButton")
@@ -42,49 +40,45 @@ local function CreateBtn(txt, callback)
     end)
 end
 
--- 1. AUTO ATTACK (จำลองการกดคลิกตีธรรมดารัวๆ)
-local vu = game:GetService("VirtualUser")
+-- 1. AUTO CAST (สั่งเปิดปุ่ม Auto Cast สีดำในเกมให้เอง และกดใช้ไม้คทาออโต้)
 CreateBtn("Auto Attack", function(v)
-    getgenv().AutoClick = v
+    getgenv().AutoWizard = v
     task.spawn(function()
-        while getgenv().AutoClick do
+        while getgenv().AutoWizard do
             pcall(function()
-                -- ยิงคำสั่ง Click ซ้ายจำลองการใช้อาวุธ/เวทมนตร์ในมือ
-                vu:Button1Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
-                task.wait(attackSpeed)
-                vu:Button1Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+                local playerGui = game.Players.LocalPlayer:WaitForChild("PlayerGui")
+                
+                -- ส่วนที่ 1: ควานหาปุ่ม Auto Cast ในหน้าจอเกมแล้วสั่งเปิดใช้งาน
+                for _, btn in pairs(playerGui:GetDescendants()) do
+                    if btn:IsA("TextButton") and (btn.Name:lower():find("cast") or btn.Text:lower():find("cast")) then
+                        firesignal(btn.MouseButton1Click)
+                        firesignal(btn.Activated)
+                    end
+                end
+                
+                -- ส่วนที่ 2: สั่งให้ตัวละครถืออาวุธและกดยิงสกิลจากคทาในช่องสล็อต
+                local char = game.Players.LocalPlayer.Character
+                local tool = char:FindFirstChildOfClass("Tool") or game.Players.LocalPlayer.Backpack:FindFirstChildOfClass("Tool")
+                
+                if tool then
+                    if tool.Parent ~= char then
+                        tool.Parent = char -- เอาคทามาถือไว้ในมือ
+                    end
+                    tool:Activate() -- สั่งยิงเวทมนตร์ออกไป
+                end
             end)
-            task.wait(attackSpeed)
+            task.wait(0.2) -- ความเร็วในการสับสกิลและยิงเวท
         end
     end)
 end)
 
--- 2. ADJUST SPEED (ปุ่มปรับความเร็วในการตี วนลูป)
-local speedBtn = Instance.new("TextButton")
-speedBtn.Size = UDim2.new(0.95, 0, 0, 35)
-speedBtn.Parent = Main
-speedBtn.Text = "Speed: รัวปกติ"
-speedBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 70)
-speedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-speedBtn.BorderSizePixel = 0
-
-speedBtn.MouseButton1Click:Connect(function()
-    if attackSpeed == 0.1 then
-        attackSpeed = 0.01 -- รัวนรกแตก
-        speedBtn.Text = "Speed: รัวนรกแตก"
-        speedBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
-    elseif attackSpeed == 0.01 then
-        attackSpeed = 0.3 -- ช้าๆ เน้นเสถียร
-        speedBtn.Text = "Speed: หน่วงเน้นเซฟ"
-        speedBtn.TextColor3 = Color3.fromRGB(100, 255, 100)
-    else
-        attackSpeed = 0.1
-        speedBtn.Text = "Speed: รัวปกติ"
-        speedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-    end
+-- 2. SPEED 100 (แถมปุ่มวิ่งไวให้ไปทำเควสท์ Lombard ง่ายขึ้น)
+CreateBtn("Speed 100", function(v)
+    game.Players.LocalPlayer.Character.Humanoid.WalkSpeed = v and 100 or 16
 end)
 
--- Anti AFK ในตัว กันเด้งออกจากห้อง
+-- Anti AFK กันเด้งออกจากเซิร์ฟเวอร์
+local vu = game:GetService("VirtualUser")
 game:GetService("Players").LocalPlayer.Idled:Connect(function()
     vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
     task.wait(1)
