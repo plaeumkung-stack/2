@@ -1,4 +1,4 @@
--- [[ PK-HUB | BE FLASH MOD (FLY & SPEED) ]] --
+-- [[ PK-HUB | WIZARD ALCHEMY | AUTO ATTACK ]] --
 local ScreenGui = Instance.new("ScreenGui")
 local Main = Instance.new("Frame")
 local Title = Instance.new("TextLabel")
@@ -6,90 +6,87 @@ local UIList = Instance.new("UIListLayout")
 
 ScreenGui.Parent = game:GetService("CoreGui")
 Main.Parent = ScreenGui
-Main.BackgroundColor3 = Color3.fromRGB(25, 25, 25)
-Main.Position = UDim2.new(0, 15, 0.5, -75)
-Main.Size = UDim2.new(0, 170, 0, 160)
+Main.BackgroundColor3 = Color3.fromRGB(20, 15, 30) -- ธีมพ่อมดม่วงๆ ดำๆ
+Main.Position = UDim2.new(0, 15, 0.5, -60)
+Main.Size = UDim2.new(0, 160, 0, 130)
 Main.Active = true
 Main.Draggable = true
 
 Title.Parent = Main
 Title.Size = UDim2.new(1, 0, 0, 25)
-Title.Text = "PK-HUB FLY"
-Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.BackgroundColor3 = Color3.fromRGB(45, 45, 45)
+Title.Text = "PK WIZARD HUB"
+Title.TextColor3 = Color3.fromRGB(200, 150, 255)
+Title.BackgroundColor3 = Color3.fromRGB(40, 30, 60)
 
 UIList.Parent = Main
 UIList.Padding = UDim.new(0, 5)
 UIList.HorizontalAlignment = Enum.HorizontalAlignment.Center
 
-local flySpeed = 50
+local attackSpeed = 0.1 -- ความเร็วเริ่มต้น (0.1 วินาทีต่อครั้ง)
+
 local function CreateBtn(txt, callback)
     local b = Instance.new("TextButton")
     local active = false
-    b.Size = UDim2.new(0.9, 0, 0, 35)
+    b.Size = UDim2.new(0.95, 0, 0, 35)
     b.Parent = Main
     b.Text = txt .. ": OFF"
-    b.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
+    b.BackgroundColor3 = Color3.fromRGB(50, 40, 70)
     b.TextColor3 = Color3.fromRGB(255, 255, 255)
     b.BorderSizePixel = 0
     
     b.MouseButton1Click:Connect(function()
         active = not active
         b.Text = txt .. ": " .. (active and "ON" or "OFF")
-        b.BackgroundColor3 = active and Color3.fromRGB(0, 200, 100) or Color3.fromRGB(55, 55, 55)
+        b.BackgroundColor3 = active and Color3.fromRGB(150, 50, 250) or Color3.fromRGB(50, 40, 70)
         callback(active)
     end)
 end
 
--- ระบบ Fly (บินตามทิศทางกล้อง)
-local lp = game.Players.LocalPlayer
-local bVel, bGyro
+-- 1. AUTO ATTACK (จำลองการกดคลิกตีธรรมดารัวๆ)
+local vu = game:GetService("VirtualUser")
+CreateBtn("Auto Attack", function(v)
+    getgenv().AutoClick = v
+    task.spawn(function()
+        while getgenv().AutoClick do
+            pcall(function()
+                -- ยิงคำสั่ง Click ซ้ายจำลองการใช้อาวุธ/เวทมนตร์ในมือ
+                vu:Button1Down(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+                task.wait(attackSpeed)
+                vu:Button1Up(Vector2.new(0, 0), workspace.CurrentCamera.CFrame)
+            end)
+            task.wait(attackSpeed)
+        end
+    end)
+end)
 
-CreateBtn("Fly (บิน)", function(v)
-    getgenv().Flying = v
-    local char = lp.Character or lp.CharacterAdded:Wait()
-    local root = char:WaitForChild("HumanoidRootPart")
-    
-    if v then
-        bVel = Instance.new("BodyVelocity", root)
-        bGyro = Instance.new("BodyGyro", root)
-        bVel.MaxForce = Vector3.new(9e9, 9e9, 9e9)
-        bGyro.MaxTorque = Vector3.new(9e9, 9e9, 9e9)
-        
-        task.spawn(function()
-            while getgenv().Flying do
-                bVel.Velocity = workspace.CurrentCamera.CFrame.LookVector * flySpeed
-                bGyro.CFrame = workspace.CurrentCamera.CFrame
-                task.wait()
-            end
-            if bVel then bVel:Destroy() end
-            if bGyro then bGyro:Destroy() end
-        end)
+-- 2. ADJUST SPEED (ปุ่มปรับความเร็วในการตี วนลูป)
+local speedBtn = Instance.new("TextButton")
+speedBtn.Size = UDim2.new(0.95, 0, 0, 35)
+speedBtn.Parent = Main
+speedBtn.Text = "Speed: รัวปกติ"
+speedBtn.BackgroundColor3 = Color3.fromRGB(50, 40, 70)
+speedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
+speedBtn.BorderSizePixel = 0
+
+speedBtn.MouseButton1Click:Connect(function()
+    if attackSpeed == 0.1 then
+        attackSpeed = 0.01 -- รัวนรกแตก
+        speedBtn.Text = "Speed: รัวนรกแตก"
+        speedBtn.TextColor3 = Color3.fromRGB(255, 100, 100)
+    elseif attackSpeed == 0.01 then
+        attackSpeed = 0.3 -- ช้าๆ เน้นเสถียร
+        speedBtn.Text = "Speed: หน่วงเน้นเซฟ"
+        speedBtn.TextColor3 = Color3.fromRGB(100, 255, 100)
     else
-        if bVel then bVel:Destroy() end
-        if bGyro then bGyro:Destroy() end
+        attackSpeed = 0.1
+        speedBtn.Text = "Speed: รัวปกติ"
+        speedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
     end
 end)
 
--- ปุ่มปรับความเร็ว (กดวน 50 -> 150 -> 300)
-local speedBtn = Instance.new("TextButton")
-speedBtn.Size = UDim2.new(0.9, 0, 0, 35)
-speedBtn.Parent = Main
-speedBtn.Text = "Fly Speed: 50"
-speedBtn.BackgroundColor3 = Color3.fromRGB(55, 55, 55)
-speedBtn.TextColor3 = Color3.fromRGB(255, 255, 255)
-speedBtn.MouseButton1Click:Connect(function()
-    if flySpeed == 50 then flySpeed = 150 
-    elseif flySpeed == 150 then flySpeed = 300
-    else flySpeed = 50 end
-    speedBtn.Text = "Fly Speed: " .. tostring(flySpeed)
+-- Anti AFK ในตัว กันเด้งออกจากห้อง
+game:GetService("Players").LocalPlayer.Idled:Connect(function()
+    vu:Button2Down(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
+    task.wait(1)
+    vu:Button2Up(Vector2.new(0,0), workspace.CurrentCamera.CFrame)
 end)
-
--- ปุ่มปิด UI
-local close = Instance.new("TextButton")
-close.Size = UDim2.new(0.9, 0, 0, 30)
-close.Parent = Main
-close.Text = "Close Hub"
-close.BackgroundColor3 = Color3.fromRGB(150, 0, 0)
-close.TextColor3 = Color3.fromRGB(255, 255, 255)
-close.MouseButton1Click:Connect(function() ScreenGui:Destroy() end)
