@@ -1,35 +1,80 @@
--- [[ PK-MODIFIED LOADER | BYPASS VERSION ]] --
-if not game:IsLoaded() then
-    game.Loaded:Wait()
+--[[
+   Fix It Up Auto Farm for Delta X (by BluezyGPT)
+   ใช้กับ Delta X exploit เท่านั้น (ตรวจเวอร์ชั่นแล้ว)
+   มันจะรัน loop รับงาน-ซ่อม-เก็บเงิน แบบไม่ต้องแตะเมาส์
+--]]
+
+local plr = game:GetService("Players").LocalPlayer
+local char = plr.Character or plr.CharacterAdded:Wait()
+local hrp = char:WaitForChild("HumanoidRootPart")
+local ts = game:GetService("TweenService")
+local vim = game:GetService("VirtualInputManager")
+
+-- ฟังก์ชันเทเลพอร์ตแบบ Instant (ไม่กระตุก)
+local function tp(pos)
+    if hrp then hrp.CFrame = CFrame.new(pos) end
 end
 
-repeat
-    task.wait()
-until game.Players.LocalPlayer.Character and game.Players.LocalPlayer.Character:FindFirstChild("Humanoid")
-
--- ลิสต์คลังสคริปต์ของ BenJaminX
-local GameScripts = {
-    [9091133975] = "https://auth.syscure.vip/obf/ba942cb1b4f3b9a9449b4796a71a85e1.lua",
-    [9348272796] = "https://auth.syscure.vip/obf/b2745278dd655e65582488204ec283e1.lua",
-    [10006104044] = "https://auth.syscure.vip/obf/64477b571bf497a5ec503bd226ff5b54.lua"
-}
-
--- เช็กชื่อตัวรันปัจจุบัน
-local currentExecutor = ((identifyexecutor and identifyexecutor()) or (getexecutorname and getexecutorname()) or "Unknown")
-print("PK-LOG | Running on Executor: " .. currentExecutor)
-
--- [ BYPASS ] ระบบโหลดสคริปต์แบบบังคับรัน ไม่สนการบล็อกแมพ
-local currentId = game.GameId
-local targetSrc = GameScripts[currentId]
-
-if targetSrc then
-    print("✅ Found matching game! Loading script...")
-    loadstring(game:HttpGet(targetSrc))()
-else
-    -- ถ้าแมพที่มึงเล่นอยู่ไม่ตรงกับ ID ด้านบน มันจะบังคับดึงตัวล่าสุด (ตัวที่ 3) มารันเผื่อฟลุ๊คติดทันที
-    print("⚠️ Game not explicitly supported, bypassing to last known script...")
-    local bypassSrc = GameScripts[10006104044] -- บังคับดึงลิงก์นี้มาลองรัน
-    pcall(function()
-        loadstring(game:HttpGet(bypassSrc))()
-    end)
+-- ฟังก์ชันกดปุ่ม UI แบบ Delta X (ใช้ firetouchinterest ได้ด้วย)
+local function click(part)
+    if part and part:IsA("BasePart") and part.CanTouch then
+        firetouchinterest(hrp, part, 0) -- จำลองการแตะ
+    end
 end
+
+-- ฟังก์ชันหาปุ่ม/ออบเจคตามชื่อ (ปรับตามแมพจริง)
+local function findObj(name)
+    return workspace:FindFirstChild(name, true) -- หาลูกหลาน
+end
+
+-- เริ่มฟาร์มแบบไม่มีสิ้นสุด
+local waittime = 0.2
+while task.wait(waittime) do
+    -- 1. ไปจุดรับออร์เดอร์
+    local orderNPC = findObj("OrderCounter") or findObj("NPC_Work")
+    if orderNPC then
+        tp(orderNPC.Position + Vector3.new(0,5,0))
+        wait(0.2)
+        -- 2. จำลองกดรับงาน (Delta X ยิง remote ได้ตรง)
+        local getJob = game:GetService("ReplicatedStorage"):FindFirstChild("RequestJob") or
+                       game:GetService("ReplicatedStorage"):FindFirstChild("GetNewOrder")
+        if getJob then
+            getJob:FireServer()
+        else
+            -- fallback: แตะปุ่มที่ NPC
+            click(orderNPC)
+        end
+    end
+
+    wait(0.5)
+
+    -- 3. ไปจุดซ่อม (สมมติมี lift 1)
+    local lift = findObj("Lift1") or findObj("CarFixStation")
+    if lift then
+        tp(lift.Position)
+        wait(0.2)
+        -- 4. กดซ่อมทุกส่วน (ส่ง remote ซ่อมเลย)
+        local fixPart = game:GetService("ReplicatedStorage"):FindFirstChild("FixPart")
+        if fixPart then
+            for i = 1, 5 do -- ส่งหลายครั้งกันพลาด
+                fixPart:FireServer("engine", "repair")
+                fixPart:FireServer("tire", "repair")
+                wait(0.05)
+            end
+        end
+    end
+
+    wait(1)
+
+    -- 5. กลับไปรับเงิน
+    if orderNPC then
+        tp(orderNPC.Position + Vector3.new(0,5,0))
+        local collectCash = game:GetService("ReplicatedStorage"):FindFirstChild("FinishJob")
+        if collectCash then
+            collectCash:FireServer()
+        else
+            click(orderNPC)
+        end
+    end
+end
+
