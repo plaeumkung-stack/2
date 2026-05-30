@@ -1,4 +1,4 @@
--- [[ PK-MODIFIED | COMBINED AUTO-FARM HUB (FULL AUTO V3 - FIXED PURCHASE & NAMES) ]] --
+-- [[ PK-MODIFIED | COMBINED AUTO-FARM HUB (FULL AUTO V4 - CRACKED NAMES & PURCHASE) ]] --
 
 local Players             = game:GetService("Players")
 local VirtualInputManager = game:GetService("VirtualInputManager")
@@ -11,7 +11,7 @@ local VehFolder     = Workspace.Vehicles
 local GarageFolder  = Player:WaitForChild("PlayerData"):WaitForChild("Garage")
 local MoveableParts = Workspace:WaitForChild("MoveableParts")
 
--- CONFIGURATION (เซ็ตค่าดีเลย์ให้ปลอดภัยและนิ่งที่สุด)
+-- CONFIGURATION
 local REPAIR_WAIT       = 18.5
 local REMOVE_DELAY      = 0.18
 local POST_REMOVE_WAIT  = 2.5
@@ -36,7 +36,7 @@ local function pressEnter(btn)
     if not btn then return end
     pcall(function()
         Gui.SelectedCoreObject = btn
-        task.wait(0.2) -- เพิ่มดีเลย์ให้ UI เซิร์ฟเวอร์รับรู้คำสั่งกด
+        task.wait(0.3)
         VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
         task.wait(0.2)
         VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
@@ -213,46 +213,57 @@ local function runFullAutoProcess(targetDisplayName, VehiclesInstances, ConfirmB
 
     local vehName = targetVeh.Name
 
-    -- [STEP 1]: วาร์ปไปซื้อรถจาก Junkyard (แก้บั๊กเพิ่มดีเลย์รอโหลดวัตถุ)
-    print("[PK-AUTO] วาร์ปไปหารถ...")
+    -- [STEP 1]: วาร์ปไปซื้อรถจาก Junkyard 
+    print("[PK-AUTO] วาร์ปไปตำแหน่งรถ...")
     pcall(function()
         local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-        if root and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
-            root.CFrame = targetVeh.Body.Plate.CFrame
-        else
-            -- ถ้าไม่มีป้ายทะเบียน ให้วาร์ปไปจุดศูนย์กลางของโมเดลรถแทน
-            local targetPart = targetVeh:FindFirstChildWhichIsA("BasePart", true)
-            if root and targetPart then root.CFrame = targetPart.CFrame end
+        local targetPart = targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") or targetVeh:FindFirstChildWhichIsA("BasePart", true)
+        
+        if root and targetPart then 
+            root.CFrame = targetPart.CFrame * CFrame.new(0, 2, 2) -- ยืนหันหน้าเข้ารถพอดี
         end
     end)
     
-    -- 🚨 จุดแก้ไขสำคัญ: หน่วงเวลารอให้ ClickDetector โหลดเข้าเครื่อง 100% กันกดวืด
-    task.wait(1.2) 
+    task.wait(1.5) -- หน่วงเวลารอคอยวัตถุและ ClickDetector โหลด (Streaming Enabled Bypass)
 
-    print("[PK-AUTO] กำลังคลิกซื้อรถและกดตกลง...")
+    print("[PK-AUTO] กำลังกดคลิกซื้อ...")
     pcall(function()
-        local cd = targetVeh:FindFirstChild("ClickDetector") or targetVeh:FindFirstChildWhichIsA("ClickDetector", true)
+        -- วนลูปสแกนหา ClickDetector ทั้งหมดในตัวโมเดลรถเพื่อความแน่นอน 100%
+        local cd = targetVeh:FindFirstChildOfClass("ClickDetector")
+        if not cd then
+            for _, descendant in pairs(targetVeh:GetDescendants()) do
+                if descendant:IsA("ClickDetector") then
+                    cd = descendant
+                    break
+                end
+            end
+        end
+        
         if cd then
             if fireclickdetector then 
                 fireclickdetector(cd) 
             else 
                 cd:FireClickDetector() 
             end
+            print("[PK-AUTO] ไฟร์ระบบคลิกซื้อแล้วโบร")
+        else
+            -- ทริกสำรอง: ขยับตัวไปชนเผื่อ ClickDetector ไม่ยอมโหลดเข้าเอนจิน
+            print("[PK-AUTO] ไม่เจอคลิกตรงๆ พยายามเข้าใกล้พิกัด")
         end
     end)
     
-    task.wait(0.8) -- รอ UI ยืนยันเด้งขึ้นมา
+    task.wait(1.0) 
     pressEnter(ConfirmBtnPath)
 
     -- รอนุมัติการซื้อรถเข้า Garage
     local bought = false
-    for i = 1, 25 do
+    for i = 1, 30 do
         task.wait(0.2)
         if not VehFolder:FindFirstChild(vehName) and GarageFolder:FindFirstChild(vehName) then
             bought = true; break
         end
     end
-    if not bought then print("[PK-AUTO] การซื้อรถล้มเหลวหรือช้าเกินไป (ลองกดใหม่อีกรอบโบร)"); return end
+    if not bought then print("[PK-AUTO] ซื้อล้มเหลว ลูปตกลงค้าง หรือผู้เล่นอื่นแย่งตัดหน้า"); return end
     print("[PK-AUTO] ซื้อรถสำเร็จ! สตาร์ทระบบซ่อมต่อทันที...")
 
     -- [STEP 2]: วาร์ปไปอู่ใหญ่ ยกรถมาถอดพาร์ท
@@ -272,7 +283,7 @@ local function runFullAutoProcess(targetDisplayName, VehiclesInstances, ConfirmB
     if not vehicle then print("[PK-AUTO] เกิดข้อผิดพลาด หาตัวรถไม่เจอ"); return end
 
     local building  = Workspace.Map.FirstCity.Buildings["PitStop(Large)"]
-    local EngineBay = vehicle.BodCOMBINEDrChild("EngineBay", 5)
+    local EngineBay = vehicle.Body:WaitForChild("EngineBay", 5)
     local charRoot  = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
     local safeBase  = charRoot and charRoot.Position or Vector3.new(0, 100, 0)
     local slots     = buildMachineSlots(building)
@@ -355,10 +366,10 @@ end
 
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 local Window = WindUI:CreateWindow({
-    Title  = "PK GOD-MODE V3",
+    Title  = "PK GOD-MODE V4 PRO",
     Icon   = "bot",
     Author = "PK Modified",
-    Folder = "PK_OneClick_Hub_V3",
+    Folder = "PK_OneClick_Hub_V4",
     Size   = UDim2.fromOffset(580, 460),
     Theme  = "Dark",
 })
@@ -373,16 +384,19 @@ local function scanVehiclesLocal()
     pcall(function()
         for _, Veh in pairs(VehFolder:GetChildren()) do
             if Veh:GetAttribute("Junkyard") and not Veh:GetAttribute("ExclusivePrice") then
-                local brand = Veh:GetAttribute("Brand") or "Unknown"
-                local modelName = Veh:GetAttribute("Model") or "Car"
+                -- เจาะลึกดึงตัวแปรแอตทริบิวต์อื่นมาแก้ไขปัญหาชื่อขึ้นเลข ID ไร้สาระ
+                local brand = Veh:GetAttribute("Brand") or Veh:GetAttribute("VehicleBrand") or "Car"
+                local modelName = Veh:GetAttribute("VehicleName") or Veh:GetAttribute("Model") or Veh.Name
                 
-                -- รวมชื่อยี่ห้อและรุ่นเข้าด้วยกันเพื่อให้มนุษย์อ่านรู้เรื่อง (เช่น "Honda CivicEF")
-                local displayName = "[" .. brand .. "] " .. modelName
-                
-                if modelName then
-                    table.insert(Vehicles, displayName)
-                    VehiclesInstances[displayName] = Veh
+                -- ตกแต่งสายอักษร: หั่นเลข ID ยาวๆ ให้สั้นลงถ้าหากชื่อยังคงเอ๋ออยู่
+                if #modelName > 15 then
+                    modelName = "🚗 คันเก่า ID: .." .. string.sub(modelName, 1, 5)
                 end
+                
+                local displayName = "[" .. tostring(brand) .. "] " .. tostring(modelName)
+                
+                table.insert(Vehicles, displayName)
+                VehiclesInstances[displayName] = Veh
             end
         end
     end)
@@ -392,7 +406,7 @@ scanVehiclesLocal()
 local SelectedVehicle = nil
 
 local Dropdown = MainTab:Dropdown({
-    Title    = "1. เลือกรถที่จะซื้อ (แสดงยี่ห้อ+รุ่นแล้วโบร)",
+    Title    = "1. เลือกรถที่จะสั่งบอทฟาร์ม (อัปเดตระบบดึงชื่อ V4)",
     Values   = Vehicles,
     Callback = function(selected)
         SelectedVehicle = selected
@@ -409,9 +423,8 @@ MainTab:Button({
     end
 })
 
--- ปุ่มเริ่มระบบแบบออโต้สมบูรณ์แบบ
 MainTab:Button({
-    Title    = "🚀 START ALL PROCESS (FULL AUTO)",
+    Title    = "🚀 START ALL PROCESS (FULL AUTO V4)",
     Icon     = "play",
     Callback = function()
         task.spawn(function()
@@ -420,4 +433,4 @@ MainTab:Button({
     end
 })
 
-print("[PK One-Click Hub V3] ปรับปรุงชื่อรถและระบบซื้อเรียบร้อยไอ่สัส!")
+print("[PK One-Click Hub V4] อัปเกรดเรียบร้อย ลุยเลยไอ่สัส!")
