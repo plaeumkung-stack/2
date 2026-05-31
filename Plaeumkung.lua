@@ -16,16 +16,12 @@ local WARP_SETTLE       = 1.5
 local SAFE_OFFSET       = 15
 local FIND_PART_TIMEOUT = 15
 
--- ── Shared ────────────────────────────────────────────────────────────────────
-
 local function findPlayerVehicle()
     for _, v in pairs(VehFolder:GetChildren()) do
         if v:GetAttribute("Owner") == Player.Name then return v end
     end
     return nil
 end
-
--- ── Junkyard ──────────────────────────────────────────────────────────────────
 
 local Vehicles          = {}
 local VehiclesInstances = {}
@@ -38,8 +34,17 @@ local function scanVehicles()
         if Veh:GetAttribute("Junkyard") and not Veh:GetAttribute("ExclusivePrice") then
             local modelName = Veh:GetAttribute("Model")
             if modelName then
-                table.insert(Vehicles, modelName)
-                VehiclesInstances[modelName] = Veh
+                local spawnChance = Veh:GetAttribute("SpawnChance") or "?"
+                local priceRaw    = Veh:GetAttribute("Price")
+                local priceStr
+                if typeof(priceRaw) == "Vector2" then
+                    priceStr = ("%d-%d"):format(priceRaw.X, priceRaw.Y)
+                else
+                    priceStr = tostring(priceRaw or "?")
+                end
+                local label = ("[SC:%s] [$ %s]"):format(tostring(spawnChance), priceStr)
+                table.insert(Vehicles, label)
+                VehiclesInstances[label] = Veh
             end
         end
     end
@@ -53,8 +58,6 @@ local function pressEnter(btn)
     task.wait(0.1)
     Gui.SelectedCoreObject = nil
 end
-
--- ── Repair ────────────────────────────────────────────────────────────────────
 
 local function waitForPartModel(partName, timeout)
     local elapsed, POLL = 0, 0.3
@@ -208,8 +211,6 @@ local function reinstallAllParts()
     end
 end
 
--- ── Vehicle ───────────────────────────────────────────────────────────────────
-
 local function tpVeh()
     local PlayerVehicle = findPlayerVehicle()
     if not PlayerVehicle then
@@ -229,21 +230,17 @@ local function tpVeh()
     print("[SpawnVehicle] Request sent.")
 end
 
--- ── Wind UI ───────────────────────────────────────────────────────────────────
-
 local WindUI = loadstring(game:HttpGet(
     "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
-    Title  = "Combined Hub",
+    Title  = "Garage Manager",
     Icon   = "wrench",
     Author = "Auto Script",
-    Folder = "CombinedHub",
+    Folder = "GarageManager",
     Size   = UDim2.fromOffset(580, 460),
     Theme  = "Dark",
 })
-
--- ── Tab: Junkyard ─────────────────────────────────────────────────────────────
 
 local JunkTab = Window:Tab({ Title = "Junkyard", Icon = "car" })
 
@@ -252,7 +249,7 @@ scanVehicles()
 local SelectedVehicle = nil
 
 local Dropdown = JunkTab:Dropdown({
-    Title    = "Select Vehicle",
+    Title    = "Available Vehicles",
     Values   = Vehicles,
     Callback = function(selected)
         SelectedVehicle = selected
@@ -261,7 +258,7 @@ local Dropdown = JunkTab:Dropdown({
 })
 
 JunkTab:Button({
-    Title    = "Refresh List",
+    Title    = "Refresh Listings",
     Icon     = "refresh-ccw",
     Callback = function()
         scanVehicles()
@@ -272,7 +269,7 @@ JunkTab:Button({
 })
 
 JunkTab:Button({
-    Title    = "Teleport to Vehicle",
+    Title    = "Inspect Vehicle",
     Icon     = "arrow-up-right",
     Callback = function()
         if not SelectedVehicle then print("[Junkyard] No vehicle selected."); return end
@@ -296,7 +293,7 @@ JunkTab:Button({
         if not SelectedVehicle then print("[Junkyard] No vehicle selected."); return end
         local targetVeh = VehiclesInstances[SelectedVehicle]
         if not targetVeh or not targetVeh:IsDescendantOf(VehFolder) then
-            print("[Junkyard] Vehicle is no longer in the junkyard."); return
+            print("[Junkyard] Vehicle is no longer available."); return
         end
 
         local vehName = targetVeh.Name
@@ -330,18 +327,277 @@ JunkTab:Button({
     end
 })
 
--- ── Tab: Repair ───────────────────────────────────────────────────────────────
+local Automatically = Window:Tab({ Title = "Automation", Icon = "bot" })
 
-local Automatically = Window:Tab({ Title = "Automatically", Icon = "bot" })
+_G.autoLoopRunning = false
+_G.WaitAfterPaint  = 150
+_G.minSpawnChance  = 50
+
+Automatically:Slider({
+    Title = "Max Spawn Chance Filter",
+    Step  = 1,
+    Value = { Min = 1, Max = 100, Default = 50 },
+    Callback = function(val)
+        _G.minSpawnChance = val
+        print("[AutoLoop] Spawn chance filter set to: " .. val)
+    end
+})
+
+
+local HoldSlider = Automatically:Slider({
+    Title = "Hold Duration Before Sale (s)",
+    Desc  = "Duration: 150s",
+    Step  = 1,
+    Value = { Min = 1, Max = 200, Default = 150 },
+    Callback = function(val)
+        _G.WaitAfterPaint = val
+        HoldSlider:SetDesc(("Duration: %ds"):format(val))
+    end
+})
+
+Automatically:Toggle({
+    Title    = "Auto Farm  —  Acquire · Restore · Paint · Sell",
+    Icon     = "repeat",
+    Default  = false,
+    Callback = function(state)
+        _G.autoLoopRunning = state
+        if not state then
+            HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint or 150))
+            print("[AutoLoop] Stopped instantly by user.")
+            return
+        end
+
+        print("[AutoLoop] Started.")
+        task.spawn(function()
+            while _G.autoLoopRunning do
+
+                local currentVehicle = findPlayerVehicle()
+                local skipToRestoration = false
+
+                if currentVehicle then
+                    print("[AutoLoop] Detect active vehicle: " .. currentVehicle.Name .. " -> Skipping Acquisition.")
+                    skipToRestoration = true
+                end
+
+                if not skipToRestoration then
+                    scanVehicles()
+                    local targetLabel, targetVeh = nil, nil
+                    for label, veh in pairs(VehiclesInstances) do
+                        if not _G.autoLoopRunning then break end
+                        local sc = veh:GetAttribute("SpawnChance") or 0
+                        if sc <= _G.minSpawnChance then
+                            targetLabel = label
+                            targetVeh   = veh
+                            break
+                        end
+                    end
+
+                    if not _G.autoLoopRunning then break end
+                    if not targetVeh then
+                        print("[AutoLoop] No eligible vehicle found (SC <= " .. _G.minSpawnChance .. "). Retrying in 5s...")
+                        task.wait(5)
+                        continue 
+                    end
+
+                    print("[AutoLoop] Eligible vehicle located: " .. targetLabel)
+
+                    local vehName = targetVeh.Name
+                    local root    = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                    if root and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
+                        root.CFrame = targetVeh.Body.Plate.CFrame
+                        print("[AutoLoop] Teleported to vehicle plate.")
+                    end
+                    task.wait(0.8)
+
+                    if not _G.autoLoopRunning then break end
+                    if targetVeh:FindFirstChild("ClickDetector") then
+                        fireclickdetector(targetVeh.ClickDetector)
+                        print("[AutoLoop] Clicked vehicle ClickDetector.")
+                    end
+                    task.wait(0.8)
+
+                    local playerGui = Player:FindFirstChild("PlayerGui")
+                    local confirmBtn = playerGui and playerGui:FindFirstChild("HUD") 
+                        and playerGui.HUD:FindFirstChild("Frames") 
+                        and playerGui.HUD.Frames:FindFirstChild("Confirmation") 
+                        and playerGui.HUD.Frames.Confirmation:FindFirstChild("Confirm")
+
+                    if confirmBtn and confirmBtn:IsDescendantOf(playerGui) then
+                        print("[AutoLoop] Confirmation button found. Pressing Enter...")
+                        pressEnter(confirmBtn)
+                    else
+                        warn("[AutoLoop] Error: Confirmation UI did not appear or is invalid. Retrying...")
+                        task.wait(2)
+                        continue
+                    end
+
+                    local bought, elapsed = false, 0
+                    repeat
+                        if not _G.autoLoopRunning then break end
+                        task.wait(0.2)
+                        elapsed = elapsed + 0.2
+                        currentVehicle = findPlayerVehicle()
+                        if currentVehicle or GarageFolder:FindFirstChild(vehName) then
+                            bought = true
+                            break
+                        end
+                    until elapsed > 5
+
+                    if not _G.autoLoopRunning then break end
+                    if not bought then
+                        print("[AutoLoop] Acquisition failed. Retrying...")
+                        task.wait(3)
+                        continue
+                    end
+                    print("[AutoLoop] Vehicle acquired: " .. targetLabel)
+
+                    print("[AutoLoop] Waiting for vehicle to register...")
+                    task.wait(5)
+                end
+
+                if not _G.autoLoopRunning then break end
+                print("[AutoLoop] Initiating restoration sequence...")
+
+                Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1076, 5, -414)
+                task.wait(1)
+
+                local vehicle = findPlayerVehicle()
+                if vehicle then
+                    local building  = Workspace.Map.FirstCity.Buildings["PitStop(Large)"]
+                    local EngineBay = vehicle.Body.EngineBay
+                    local charRoot  = Player.Character:FindFirstChild("HumanoidRootPart")
+                    local safeBase  = charRoot and charRoot.Position or Vector3.new(0, 100, 0)
+                    local slots     = buildMachineSlots(building)
+
+                    if not _G.autoLoopRunning then break end
+                    removeAllPartsRaw(EngineBay)
+
+                    local queues = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
+                    local total  = 0
+                    for _, child in pairs(MoveableParts:GetChildren()) do
+                        if child:GetAttribute("Owner") == Player.Name then
+                            local rType = child:GetAttribute("RepairMachine")
+                            if rType and queues[rType] then
+                                table.insert(queues[rType], { Name = child.Name })
+                                total = total + 1
+                            end
+                        end
+                    end
+
+                    if total > 0 and _G.autoLoopRunning then
+                        local assignments            = distributeToSlots(slots, queues)
+                        local doneCount, totalAssign = 0, #assignments
+                        for idx, assign in ipairs(assignments) do
+                            if #assign.parts > 0 then
+                                task.spawn(function()
+                                    runSlot(assign.slot, assign.parts, safeBase, idx)
+                                    doneCount = doneCount + 1
+                                end)
+                            else
+                                doneCount = doneCount + 1
+                            end
+                        end
+                        while doneCount < totalAssign and _G.autoLoopRunning do task.wait(0.5) end
+                    end
+
+                    if not _G.autoLoopRunning then break end
+                    reinstallAllParts()
+                    task.wait(0.5)
+                    reinstallAllParts()
+                else
+                    print("[AutoLoop] ERROR: Vehicle not found in workspace for repair.")
+                end
+
+                if not _G.autoLoopRunning then break end
+                print("[AutoLoop] Restoration complete. Cooling down...")
+                task.wait(3)
+
+                if not _G.autoLoopRunning then break end
+                print("[AutoLoop] Initiating paint process...")
+
+                Player.Character.HumanoidRootPart.CFrame = CFrame.new(
+                    -990.619568, 4.53032351, -387.379364,
+                     0.350393713, -8.45001722e-08, -0.936602473,
+                    -4.68328265e-09, 1, -9.19719554e-08,
+                     0.936602473, 3.66127715e-08, 0.350393713
+                )
+                task.wait(0.5)
+                tpVeh()
+                task.wait(2)
+
+                if not _G.autoLoopRunning then break end
+                local model    = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
+                local children = model:GetChildren()
+                fireproximityprompt(children[4].Prompt.ProximityPrompt)
+                task.wait(0.5)
+                
+                local paintConfirm = Player.PlayerGui:FindFirstChild("HUD") and Player.PlayerGui.HUD.Frames.Paint.Confirm
+                if paintConfirm then pressEnter(paintConfirm) end
+
+                print("[AutoLoop] Paint applied. Holding for " .. _G.WaitAfterPaint .. "s...")
+                
+                local totalWait = _G.WaitAfterPaint
+                for remaining = totalWait, 0, -1 do
+                    if not _G.autoLoopRunning then break end
+                    HoldSlider:SetDesc(("⏳ Remaining: %ds / %ds"):format(remaining, totalWait))
+                    task.wait(1)
+                end
+                HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint))
+
+                if not _G.autoLoopRunning then break end
+                print("[AutoLoop] Proceeding to sale...")
+
+                Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1915, 4, -785)
+                task.wait(0.5)
+                tpVeh()
+                task.wait(1)
+                
+                if not _G.autoLoopRunning then break end
+                fireproximityprompt(workspace.Utils.SellCar.Prompt.ProximityPrompt)
+                task.wait(0.8)
+                
+                local sellConfirm = Player.PlayerGui:FindFirstChild("HUD") and Player.PlayerGui.HUD.Frames.Confirmation.Confirm
+                if sellConfirm then
+                    pressEnter(sellConfirm)
+                end
+                task.wait(0.5)
+                Gui.SelectedCoreObject = nil
+
+                local sellCheck, sellElapsed = false, 0
+                repeat
+                    task.wait(0.2)
+                    sellElapsed = sellElapsed + 0.2
+                    if not findPlayerVehicle() then
+                        sellCheck = true
+                        break
+                    end
+                until sellElapsed > 5
+
+                if sellCheck then
+                    print("[AutoLoop] Sale confirmed. Restarting cycle...")
+                else
+                    print("[AutoLoop] WARNING: Vehicle still detected after sale!")
+                end
+
+                task.wait(3)
+            end
+
+            HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint or 150))
+            print("[AutoLoop] Automation stopped completely.")
+        end)
+    end
+})
+
+Automatically:Divider()
 
 Automatically:Button({
-    Title    = "Auto Repair",
+    Title    = "Repair Vehicle",
     Icon     = "settings",
     Callback = function()
         task.spawn(function()
             Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1076, 5, -414)
             local vehicle = findPlayerVehicle()
-            if not vehicle then warn("[Repair] No vehicle found."); return end
+            if not vehicle then warn("[Repair] No active vehicle found."); return end
 
             local building  = Workspace.Map.FirstCity.Buildings["PitStop(Large)"]
             local EngineBay = vehicle.Body.EngineBay
@@ -349,7 +605,7 @@ Automatically:Button({
             local safeBase  = charRoot and charRoot.Position or Vector3.new(0, 100, 0)
             local slots     = buildMachineSlots(building)
 
-            print("[Repair] Step 1: Removing all parts...")
+            print("[Repair] Removing installed components...")
             removeAllPartsRaw(EngineBay)
 
             local queues = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
@@ -363,9 +619,9 @@ Automatically:Button({
                     end
                 end
             end
-            if total == 0 then warn("[Repair] No parts found."); return end
+            if total == 0 then warn("[Repair] No repairable parts detected."); return end
 
-            print("[Repair] Step 2: Repairing " .. total .. " part(s) in parallel...")
+            print("[Repair] Processing " .. total .. " component(s)...")
             local assignments     = distributeToSlots(slots, queues)
             local doneCount       = 0
             local totalAssign     = #assignments
@@ -381,16 +637,16 @@ Automatically:Button({
             end
             while doneCount < totalAssign do task.wait(0.5) end
 
-            print("[Repair] Step 3: Reinstalling parts...")
+            print("[Repair] Reinstalling components...")
             reinstallAllParts()
             reinstallAllParts()
-            print("[Repair] Complete.")
+            print("[Repair] Restoration complete.")
         end)
     end
 })
 
 Automatically:Button({
-    Title    = "Auto Paint",
+    Title    = "Apply Paint",
     Icon     = "paintbrush",
     Callback = function()
         task.spawn(function()
@@ -406,11 +662,12 @@ Automatically:Button({
             local model    = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
             local children = model:GetChildren()
             fireproximityprompt(children[4].Prompt.ProximityPrompt)
-            task.wait(0.5) 
+            task.wait(0.5)
             pressEnter(Player.PlayerGui.HUD.Frames.Paint.Confirm)
         end)
     end
 })
+
 Automatically:Button({
     Title    = "Sell Vehicle",
     Icon     = "dollar-sign",
@@ -426,12 +683,10 @@ Automatically:Button({
     end
 })
 
--- ── Tab: Vehicle ──────────────────────────────────────────────────────────────
-
 local VehTab = Window:Tab({ Title = "Vehicle", Icon = "box" })
 
 VehTab:Button({
-    Title    = "Spawn Vehicle",
+    Title    = "Deploy Vehicle",
     Icon     = "refresh-cw",
     Callback = function()
         task.spawn(tpVeh)
@@ -439,7 +694,7 @@ VehTab:Button({
 })
 
 VehTab:Button({
-    Title    = "Teleport to Vehicle",
+    Title    = "Locate Vehicle",
     Icon     = "map-pin",
     Callback = function()
         local v = findPlayerVehicle()
@@ -453,7 +708,7 @@ VehTab:Button({
 })
 
 VehTab:Button({
-    Title    = "Install Parts",
+    Title    = "Install Components",
     Icon     = "arrow-down-to-line",
     Callback = function()
         task.spawn(reinstallAllParts)
@@ -461,4 +716,4 @@ VehTab:Button({
     end
 })
 
-print("[Combined Hub] Loaded successfully.")
+print("[Garage Manager] Loaded successfully.")
