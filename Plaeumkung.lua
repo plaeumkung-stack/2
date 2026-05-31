@@ -3,6 +3,7 @@ local VirtualInputManager = game:GetService("VirtualInputManager")
 local Gui                 = game:GetService("GuiService")
 local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local Workspace           = game:GetService("Workspace")
+local RunService          = game:GetService("RunService")
 
 local Player        = Players.LocalPlayer
 local VehFolder     = Workspace.Vehicles
@@ -15,6 +16,10 @@ local POST_REMOVE_WAIT  = 2
 local WARP_SETTLE       = 1.5
 local SAFE_OFFSET       = 15
 local FIND_PART_TIMEOUT = 15
+
+local scriptLoopId = 0
+local targetEndTime = 0
+local countdownConnection = nil
 
 local function findPlayerVehicle()
     for _, v in pairs(VehFolder:GetChildren()) do
@@ -230,8 +235,35 @@ local function tpVeh()
     print("[SpawnVehicle] Request sent.")
 end
 
-local WindUI = loadstring(game:HttpGet(
-    "https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local function findNearestPrompt(modelFolder)
+    local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
+    local nearest, nearestDist = nil, math.huge
+    for _, child in pairs(modelFolder:GetChildren()) do
+        local promptPart = child:FindFirstChild("Prompt")
+        if promptPart then
+            local pp = promptPart:FindFirstChildWhichIsA("ProximityPrompt")
+            if pp then
+                local ok, pos = pcall(function() return child:GetPivot().Position end)
+                if not ok then
+                    local bp = child:FindFirstChildWhichIsA("BasePart")
+                    if bp then ok = true; pos = bp.Position end
+                end
+                if ok then
+                    local dist = (pos - root.Position).Magnitude
+                    if dist < nearestDist then
+                        nearestDist = dist
+                        nearest = pp
+                    end
+                end
+            end
+        end
+    end
+    return nearest
+end
+
+-- [[ UI Setup ]]
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
 
 local Window = WindUI:CreateWindow({
     Title  = "Garage Manager",
@@ -343,6 +375,7 @@ Automatically:Slider({
     end
 })
 
+local lastSliderVal = 150
 
 local HoldSlider = Automatically:Slider({
     Title = "Hold Duration Before Sale (s)",
@@ -350,26 +383,38 @@ local HoldSlider = Automatically:Slider({
     Step  = 1,
     Value = { Min = 1, Max = 200, Default = 150 },
     Callback = function(val)
+        local diff = val - lastSliderVal
         _G.WaitAfterPaint = val
-        HoldSlider:SetDesc(("Duration: %ds"):format(val))
+        lastSliderVal = val
+        
+        if _G.autoLoopRunning and targetEndTime > 0 then
+            targetEndTime = targetEndTime + diff
+        else
+            HoldSlider:SetDesc(("Duration: %ds"):format(val))
+        end
     end
 })
 
 Automatically:Toggle({
-    Title    = "Auto Farm  —  Acquire · Restore · Paint · Sell",
+    Title    = "Auto Farm  â  Acquire Â· Restore Â· Paint Â· Sell",
     Icon     = "repeat",
     Default  = false,
     Callback = function(state)
         _G.autoLoopRunning = state
         if not state then
+            if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
+            targetEndTime = 0
             HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint or 150))
             print("[AutoLoop] Stopped instantly by user.")
             return
         end
 
+        scriptLoopId = scriptLoopId + 1
+        local currentId = scriptLoopId
+
         print("[AutoLoop] Started.")
         task.spawn(function()
-            while _G.autoLoopRunning do
+            while _G.autoLoopRunning and scriptLoopId == currentId do
 
                 local currentVehicle = findPlayerVehicle()
                 local skipToRestoration = false
@@ -383,7 +428,7 @@ Automatically:Toggle({
                     scanVehicles()
                     local targetLabel, targetVeh = nil, nil
                     for label, veh in pairs(VehiclesInstances) do
-                        if not _G.autoLoopRunning then break end
+                        if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                         local sc = veh:GetAttribute("SpawnChance") or 0
                         if sc <= _G.minSpawnChance then
                             targetLabel = label
@@ -392,7 +437,7 @@ Automatically:Toggle({
                         end
                     end
 
-                    if not _G.autoLoopRunning then break end
+                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                     if not targetVeh then
                         print("[AutoLoop] No eligible vehicle found (SC <= " .. _G.minSpawnChance .. "). Retrying in 5s...")
                         task.wait(5)
@@ -409,7 +454,7 @@ Automatically:Toggle({
                     end
                     task.wait(0.8)
 
-                    if not _G.autoLoopRunning then break end
+                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                     if targetVeh:FindFirstChild("ClickDetector") then
                         fireclickdetector(targetVeh.ClickDetector)
                         print("[AutoLoop] Clicked vehicle ClickDetector.")
@@ -433,7 +478,7 @@ Automatically:Toggle({
 
                     local bought, elapsed = false, 0
                     repeat
-                        if not _G.autoLoopRunning then break end
+                        if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                         task.wait(0.2)
                         elapsed = elapsed + 0.2
                         currentVehicle = findPlayerVehicle()
@@ -443,7 +488,7 @@ Automatically:Toggle({
                         end
                     until elapsed > 5
 
-                    if not _G.autoLoopRunning then break end
+                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                     if not bought then
                         print("[AutoLoop] Acquisition failed. Retrying...")
                         task.wait(3)
@@ -455,7 +500,7 @@ Automatically:Toggle({
                     task.wait(5)
                 end
 
-                if not _G.autoLoopRunning then break end
+                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                 print("[AutoLoop] Initiating restoration sequence...")
 
                 Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1076, 5, -414)
@@ -469,7 +514,7 @@ Automatically:Toggle({
                     local safeBase  = charRoot and charRoot.Position or Vector3.new(0, 100, 0)
                     local slots     = buildMachineSlots(building)
 
-                    if not _G.autoLoopRunning then break end
+                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                     removeAllPartsRaw(EngineBay)
 
                     local queues = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
@@ -484,7 +529,7 @@ Automatically:Toggle({
                         end
                     end
 
-                    if total > 0 and _G.autoLoopRunning then
+                    if total > 0 and _G.autoLoopRunning and scriptLoopId == currentId then
                         local assignments            = distributeToSlots(slots, queues)
                         local doneCount, totalAssign = 0, #assignments
                         for idx, assign in ipairs(assignments) do
@@ -497,10 +542,10 @@ Automatically:Toggle({
                                 doneCount = doneCount + 1
                             end
                         end
-                        while doneCount < totalAssign and _G.autoLoopRunning do task.wait(0.5) end
+                        while doneCount < totalAssign and _G.autoLoopRunning and scriptLoopId == currentId do task.wait(0.5) end
                     end
 
-                    if not _G.autoLoopRunning then break end
+                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                     reinstallAllParts()
                     task.wait(0.5)
                     reinstallAllParts()
@@ -508,11 +553,11 @@ Automatically:Toggle({
                     print("[AutoLoop] ERROR: Vehicle not found in workspace for repair.")
                 end
 
-                if not _G.autoLoopRunning then break end
+                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                 print("[AutoLoop] Restoration complete. Cooling down...")
                 task.wait(3)
 
-                if not _G.autoLoopRunning then break end
+                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                 print("[AutoLoop] Initiating paint process...")
 
                 Player.Character.HumanoidRootPart.CFrame = CFrame.new(
@@ -525,26 +570,57 @@ Automatically:Toggle({
                 tpVeh()
                 task.wait(2)
 
-                if not _G.autoLoopRunning then break end
-                local model    = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
-                local children = model:GetChildren()
-                fireproximityprompt(children[4].Prompt.ProximityPrompt)
+                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+                local model       = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
+                local paintPrompt = findNearestPrompt(model)
+                if paintPrompt then
+                    fireproximityprompt(paintPrompt)
+                else
+                    warn("[AutoLoop] No paint ProximityPrompt found near player.")
+                end
                 task.wait(0.5)
                 
                 local paintConfirm = Player.PlayerGui:FindFirstChild("HUD") and Player.PlayerGui.HUD.Frames.Paint.Confirm
                 if paintConfirm then pressEnter(paintConfirm) end
 
                 print("[AutoLoop] Paint applied. Holding for " .. _G.WaitAfterPaint .. "s...")
-                
-                local totalWait = _G.WaitAfterPaint
-                for remaining = totalWait, 0, -1 do
-                    if not _G.autoLoopRunning then break end
-                    HoldSlider:SetDesc(("⏳ Remaining: %ds / %ds"):format(remaining, totalWait))
-                    task.wait(1)
-                end
-                HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint))
 
-                if not _G.autoLoopRunning then break end
+                targetEndTime = os.clock() + _G.WaitAfterPaint
+                local isWaiting = true
+                local lastSecText = -1
+                
+                if countdownConnection then countdownConnection:Disconnect() end
+                
+                countdownConnection = RunService.RenderStepped:Connect(function()
+                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then
+                        isWaiting = false
+                        if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
+                        return
+                    end
+                    
+                    local now = os.clock()
+                    local remainingFloat = targetEndTime - now
+                    local remainingInt = math.ceil(remainingFloat)
+                    
+                    if remainingFloat <= 0 then
+                        isWaiting = false
+                        if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
+                        return
+                    end
+                    
+                    if remainingInt ~= lastSecText then
+                        HoldSlider:SetDesc(("â³ Remaining: %ds / %ds"):format(remainingInt, _G.WaitAfterPaint))
+                        lastSecText = remainingInt
+                    end
+                end)
+                
+                while isWaiting do task.wait() end
+                
+                targetEndTime = 0
+                HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint))
+                -- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
+
+                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                 print("[AutoLoop] Proceeding to sale...")
 
                 Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1915, 4, -785)
@@ -552,7 +628,7 @@ Automatically:Toggle({
                 tpVeh()
                 task.wait(1)
                 
-                if not _G.autoLoopRunning then break end
+                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                 fireproximityprompt(workspace.Utils.SellCar.Prompt.ProximityPrompt)
                 task.wait(0.8)
                 
@@ -571,7 +647,7 @@ Automatically:Toggle({
                         sellCheck = true
                         break
                     end
-                until sellElapsed > 5
+                until sellElapsed > 5 or not _G.autoLoopRunning or scriptLoopId ~= currentId
 
                 if sellCheck then
                     print("[AutoLoop] Sale confirmed. Restarting cycle...")
@@ -582,6 +658,7 @@ Automatically:Toggle({
                 task.wait(3)
             end
 
+            if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
             HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint or 150))
             print("[AutoLoop] Automation stopped completely.")
         end)
@@ -659,9 +736,13 @@ Automatically:Button({
             tpVeh()
             task.wait(2)
 
-            local model    = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
-            local children = model:GetChildren()
-            fireproximityprompt(children[4].Prompt.ProximityPrompt)
+            local model       = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
+            local paintPrompt = findNearestPrompt(model)
+            if paintPrompt then
+                fireproximityprompt(paintPrompt)
+            else
+                warn("[Paint] No paint ProximityPrompt found near player.")
+            end
             task.wait(0.5)
             pressEnter(Player.PlayerGui.HUD.Frames.Paint.Confirm)
         end)
