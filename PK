@@ -1,61 +1,85 @@
--- [[ PK-MODIFIED | ASTD AUTO-FARM MACRO HUB ]] --
+-- [[ PK-MODIFIED | ASTD AUTO-FARM WITH WIND UI ]] --
 
-local Players = game:GetService("Players")
-local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Players             = game:GetService("Players")
+local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local VirtualInputManager = game:GetService("VirtualInputManager")
+local LogService          = game:GetService("LogService")
 
 local Player = Players.LocalPlayer
 local Character = Player.Character or Player.CharacterAdded:Wait()
 
--- CONFIGURATION (ปรับแต่งค่าตามทีมของมึงได้เลยโบร)
-local UNIT_SLOT = 1          -- ช่องยูนิตที่ต้องการวาง (กดปุ่ม 1, 2, 3, 4...)
-local PLACE_COORDINATE = CFrame.new(0, 0, 0) -- พิกัดที่จะให้ตัวละครเดินไปวาง (หรือเซ็ตพิกัดแมพ)
+-- CONFIGURATION (ค่าเริ่มต้นระบบบอทมาโคร)
+local MacroConfig = {
+    UnitSlot = 1,              -- ช่องยูนิตที่ต้องการวาง (ปุ่ม 1)
+    UpgradeLoops = 5,          -- จำนวนรอบที่จะให้สั่งอัปเกรดรัวๆ
+    IsRunning = false          -- สถานะเปิด/ปิดระบบ
+}
 
--- ── 1. ฟังก์ชันสั่งวางยูนิตอัตโนมัติ (Auto Place) ──────────────────────────────
+-- ── Core Macro Functions ──────────────────────────────────────────────────────
+
+-- 1. ฟังก์ชันสั่งวางยูนิตออโต้
 local function autoPlaceUnit(slot, targetCFrame)
     pcall(function()
-        -- จำลองการกดปุ่มเลือกช่องยูนิตบนคีย์บอร์ด
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode["Space"], false, game) -- ตัวอย่างเปลี่ยนสล็อต
+        -- ทริกเกอร์เลือกสล็อตยูนิต
+        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.One, false, game)
         task.wait(0.2)
+        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.One, false, game)
+        task.wait(0.3)
         
-        -- เรียกใช้ Remote ของเกมตรงๆ เพื่อวางยูนิต (เร็วกว่าและไม่พลาด)
-        -- หมายเหตุ: รีโมทของ ASTD อาจมีการเปลี่ยนชื่อในแต่ละอัปเดต ให้ระวังตรงนี้
-        local args = {
-            [1] = "PlaceUnit",
-            [2] = slot,
-            [3] = targetCFrame
-        }
-        ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Input"):FireServer(unpack(args))
-        print("[PK-MACRO] วางยูนิตช่อง " .. slot .. " เรียบร้อย!")
+        -- ส่งรีโมทสั่งวางยูนิตตรงพิกัดใต้เท้าตัวละคร
+        local inputRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Input")
+        if inputRemote then
+            local args = {
+                [1] = "PlaceUnit",
+                [2] = slot,
+                [3] = targetCFrame
+            }
+            inputRemote:FireServer(unpack(args))
+            print("[PK-MACRO] วางยูนิตสล็อต " .. slot .. " สำเร็จ!")
+        end
     end)
 end
 
--- ── 2. ฟังก์ชันสั่งอัปเกรดยูนิต (Auto Upgrade) ─────────────────────────────────
-local function autoUpgradeUnit(unitModel)
-    if not unitModel then return end
+-- 2. ฟังก์ชันอัปเกรดยูนิตทั้งหมดที่เราวางไว้
+local function autoUpgradeAll()
     pcall(function()
-        local args = {
-            [1] = "UpgradeUnit",
-            [2] = unitModel
-        }
-        ReplicatedStorage:WaitForChild("Remotes"):WaitForChild("Input"):FireServer(unpack(args))
-        print("[PK-MACRO] สั่งอัปเกรดยูนิตแล้วโบร!")
+        -- วนลูปหาโมเดลยูนิตที่เป็นของเราใน Workspace (ตัวเกมมักจะแปะชื่อเจ้าของไว้ที่ Attribute หรือ Object Name)
+        local inputRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Input")
+        if not inputRemote then return end
+
+        -- สแกนหาพาร์ทชิ้นส่วนยูนิตที่อยู่ในด่านเพื่อส่งรีโมทอัปเกรดรัวๆ
+        for _, obj in pairs(workspace:GetChildren()) do
+            if obj:IsA("Model") and (obj:GetAttribute("Owner") == Player.Name or obj.Name:find(Player.Name)) then
+                for i = 1, MacroConfig.UpgradeLoops do
+                    local args = {
+                        [1] = "UpgradeUnit",
+                        [2] = obj
+                    }
+                    inputRemote:FireServer(unpack(args))
+                    task.wait(0.1)
+                end
+            end
+        end
     end)
 end
 
--- ── 3. ลูปเช็คเมื่อเกมจบเพื่อกดเริ่มใหม่ (Auto Replay Loop) ──────────────────────
-local function startAutoReplay()
+-- 3. ลูปตรวจจับเกมจบเพื่อกดเริ่มด่านเดิมใหม่วนไป (Auto Replay Loop)
+local function startReplayMonitor()
     task.spawn(function()
-        while task.wait(2) do
+        while true do
+            task.wait(2)
+            if not MacroConfig.IsRunning then break end
+            
             pcall(function()
-                -- เช็ค UI ตอนจบเกม (ดึงจากหน้าต่างเงินรางวัล หรือปุ่ม Replay)
-                local hud = Player.PlayerGui:FindFirstChild("HUD")
-                if hud and hud:FindFirstChild("FinishedFrame") and hud.FinishedFrame.Visible then
-                    print("[PK-MACRO] เกมจบแล้ว! กำลังกดเริ่มเกมใหม่ให้อัตโนมัติ...")
-                    task.wait(1)
+                -- ตรวจเช็คว่า UI สรุปคะแนนหรือ FinishFrame โผล่ขึ้นมาหรือยัง
+                local guiHUD = Player.PlayerGui:FindFirstChild("HUD")
+                local finishFrame = guiHUD and (guiHUD:FindFirstChild("FinishedFrame") or guiHUD:FindFirstChild("WinFrame"))
+                
+                if finishFrame and finishFrame.Visible then
+                    print("[PK-MACRO] จบด่านแล้ว! กำลังกด Replay เริ่มลูปใหม่ใน 3 วินาที...")
+                    task.wait(3)
                     
-                    -- ทริกเกอร์รีโมทรันด่านเดิมซ้ำ
-                    local replayRemote = ReplicatedStorage:FindFirstChild("Remotes"):FindFirstChild("Replay")
+                    local replayRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Replay")
                     if replayRemote then
                         replayRemote:FireServer()
                     end
@@ -65,12 +89,79 @@ local function startAutoReplay()
     end)
 end
 
--- ── 🚀 สั่งรันระบบมาโคร ────────────────────────────────────────────────────────
-print("[PK ASTD MACRO] ระบบมาโครเริ่มทำงานแล้วไอ่สัส!")
+-- ── ระบบจัดการลูปทำงานหลักแบบ One-Click ─────────────────────────────────────────
+local function runMainMacroProcess()
+    print("[PK-MACRO] เริ่มกระบวนการฟาร์มมาโครออโต้...")
+    
+    -- เปิดระบบมอนิเตอร์ปุ่มกดเริ่มเกมใหม่รอไว้เลย
+    startReplayMonitor()
+    
+    while MacroConfig.IsRunning do
+        pcall(function()
+            local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+            if root then
+                -- ขั้นตอนที่ 1: เดินไปจุดยุทธศาสตร์ย่อย หรือวางยูนิตตัวแรกใต้เท้าทันที
+                autoPlaceUnit(MacroConfig.UnitSlot, root.CFrame * CFrame.new(0, -3, -4))
+                task.wait(5)
+                
+                -- ขั้นตอนที่ 2: สั่งอัปเกรดรัวๆ ทุกตัวที่วางไว้กินตังค์ในเกม
+                autoUpgradeAll()
+            end
+        end)
+        task.wait(10) -- หน่วงเวลาเช็คลูปทุกๆ 10 วินาทีป้องกันสคริปต์หลุด
+    end
+end
 
--- เปิดใช้งานระบบออโต้รีเพลย์รอไว้เลย
-startAutoReplay()
+-- ── Wind UI Setup ─────────────────────────────────────────────────────────────
 
--- ตัวอย่าง: บอทสั่งวางยูนิตช่อง 1 ทันทีเมื่อเข้าเกม
-task.wait(5)
-autoPlaceUnit(UNIT_SLOT, Player.Character.HumanoidRootPart.CFrame * CFrame.new(0, -3, -5))
+local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+local Window = WindUI:CreateWindow({
+    Title  = "PK ASTD MACRO GOD-MODE",
+    Icon   = "swords",
+    Author = "PK Modified",
+    Folder = "PK_ASTD_Macro",
+    Size   = UDim2.fromOffset(580, 460),
+    Theme  = "Dark",
+})
+
+local MacroTab = Window:Tab({ Title = "Auto Farm", Icon = "zap" })
+
+MacroTab:Paragraph({
+    Title = "วิธีใช้งานมาโครกันป้อมออโต้",
+    Desc  = "1. ติดยูนิตหลักไว้ที่ช่องสล็อต 1\n2. เข้าไปในด่าน Story หรือ Infinite\n3. กดปุ่มด้านล่างนี้เพียงปุ่มเดียว ระบบจะทำการวาง ยืนอัปเกรด และกดเริ่มเกมใหม่ให้เองทั้งหมดโบร!"
+})
+
+-- 🚀 ปุ่มกดเริ่มทำงานรอบเดียวจบ (One-Click Control Toggle)
+MacroTab:Toggle({
+    Title    = "🚀 START AUTO FARM MACRO",
+    Callback = function(state)
+        MacroConfig.IsRunning = state
+        if state then
+            task.spawn(runMainMacroProcess)
+        else
+            print("[PK-MACRO] ปิดระบบทำงานบอทมาโครแล้วโบร")
+        end
+    end
+})
+
+MacroTab:Slider({
+    Title    = "ตั้งค่ารอบกดอัปเกรดรัวๆ (รอบต่อยูนิต)",
+    Min      = 1,
+    Max      = 10,
+    Value    = MacroConfig.UpgradeLoops,
+    Callback = function(value)
+        MacroConfig.UpgradeLoops = value
+    end
+})
+
+-- บายพาสระบบกันหลุดออกจากเกมกรณีฟาร์มข้ามคืน (Anti-AFK Bypass)
+pcall(function()
+    local VirtualUser = game:GetService("VirtualUser")
+    Player.Idled:Connect(function()
+        VirtualUser:CaptureController()
+        VirtualUser:ClickButton2(Vector2.new(0,0))
+        print("[PK-SYSTEM] ป้องกันการเตะออกจากเซิร์ฟเวอร์เรียบร้อยไอ่สัส!")
+    end)
+end)
+
+print("[PK ASTD Hub] โหลดเมนูและสคริปต์มาโครเรียบร้อย ลุยเลยโบร!")
