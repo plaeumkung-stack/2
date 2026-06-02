@@ -1,6 +1,3 @@
-นี่คือโค้ดที่คุณส่งมาครับ สามารถคัดลอกจากกล่องข้อความด้านล่างนี้ไปใช้งานได้เลยครับ
-
-```lua
 local Players = game:GetService("Players")
 local VirtualInputManager = game:GetService("VirtualInputManager")
 local Gui = game:GetService("GuiService")
@@ -901,5 +898,3 @@ VehTab:Button({
 })
 
 print("[Garage Manager] Loaded successfully.")
-
-```
