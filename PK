@@ -1,167 +1,905 @@
--- [[ PK-MODIFIED | ASTD AUTO-FARM WITH WIND UI ]] --
+นี่คือโค้ดที่คุณส่งมาครับ สามารถคัดลอกจากกล่องข้อความด้านล่างนี้ไปใช้งานได้เลยครับ
 
-local Players             = game:GetService("Players")
-local ReplicatedStorage   = game:GetService("ReplicatedStorage")
+```lua
+local Players = game:GetService("Players")
 local VirtualInputManager = game:GetService("VirtualInputManager")
-local LogService          = game:GetService("LogService")
+local Gui = game:GetService("GuiService")
+local ReplicatedStorage = game:GetService("ReplicatedStorage")
+local Workspace = game:GetService("Workspace")
+local RunService = game:GetService("RunService")
 
 local Player = Players.LocalPlayer
-local Character = Player.Character or Player.CharacterAdded:Wait()
+local VehFolder = Workspace.Vehicles
+local GarageFolder = Player:WaitForChild("PlayerData"):WaitForChild("Garage")
+local MoveableParts = Workspace:WaitForChild("MoveableParts")
 
--- CONFIGURATION (ค่าเริ่มต้นระบบบอทมาโคร)
-local MacroConfig = {
-    UnitSlot = 1,              -- ช่องยูนิตที่ต้องการวาง (ปุ่ม 1)
-    UpgradeLoops = 5,          -- จำนวนรอบที่จะให้สั่งอัปเกรดรัวๆ
-    IsRunning = false          -- สถานะเปิด/ปิดระบบ
-}
+local REPAIR_WAIT = 18
+local REMOVE_DELAY = 0.15
+local POST_REMOVE_WAIT = 2
+local WARP_SETTLE = 1.5
+local SAFE_OFFSET = 15
+local FIND_PART_TIMEOUT = 15
 
--- ── Core Macro Functions ──────────────────────────────────────────────────────
+local scriptLoopId = 0
+local targetEndTime = 0
+local countdownConnection = nil
 
--- 1. ฟังก์ชันสั่งวางยูนิตออโต้
-local function autoPlaceUnit(slot, targetCFrame)
-    pcall(function()
-        -- ทริกเกอร์เลือกสล็อตยูนิต
-        VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.One, false, game)
-        task.wait(0.2)
-        VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.One, false, game)
-        task.wait(0.3)
-        
-        -- ส่งรีโมทสั่งวางยูนิตตรงพิกัดใต้เท้าตัวละคร
-        local inputRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Input")
-        if inputRemote then
-            local args = {
-                [1] = "PlaceUnit",
-                [2] = slot,
-                [3] = targetCFrame
-            }
-            inputRemote:FireServer(unpack(args))
-            print("[PK-MACRO] วางยูนิตสล็อต " .. slot .. " สำเร็จ!")
-        end
-    end)
+local function findPlayerVehicle()
+ for _, v in pairs(VehFolder:GetChildren()) do
+ if v:GetAttribute("Owner") == Player.Name then return v end
+ end
+ return nil
 end
 
--- 2. ฟังก์ชันอัปเกรดยูนิตทั้งหมดที่เราวางไว้
-local function autoUpgradeAll()
-    pcall(function()
-        -- วนลูปหาโมเดลยูนิตที่เป็นของเราใน Workspace (ตัวเกมมักจะแปะชื่อเจ้าของไว้ที่ Attribute หรือ Object Name)
-        local inputRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Input")
-        if not inputRemote then return end
+local Vehicles = {}
+local VehiclesInstances = {}
+local ConfirmBtnPath = Player:WaitForChild("PlayerGui").HUD.Frames.Confirmation.Confirm
 
-        -- สแกนหาพาร์ทชิ้นส่วนยูนิตที่อยู่ในด่านเพื่อส่งรีโมทอัปเกรดรัวๆ
-        for _, obj in pairs(workspace:GetChildren()) do
-            if obj:IsA("Model") and (obj:GetAttribute("Owner") == Player.Name or obj.Name:find(Player.Name)) then
-                for i = 1, MacroConfig.UpgradeLoops do
-                    local args = {
-                        [1] = "UpgradeUnit",
-                        [2] = obj
-                    }
-                    inputRemote:FireServer(unpack(args))
-                    task.wait(0.1)
-                end
-            end
-        end
-    end)
+local function scanVehicles()
+ table.clear(Vehicles)
+ table.clear(VehiclesInstances)
+ for _, Veh in pairs(VehFolder:GetChildren()) do
+ if Veh:GetAttribute("Junkyard") and not Veh:GetAttribute("ExclusivePrice") then
+ local modelName = Veh:GetAttribute("Model")
+ if modelName then
+ local spawnChance = Veh:GetAttribute("SpawnChance") or "?"
+ local priceRaw = Veh:GetAttribute("Price")
+ local priceStr
+ if typeof(priceRaw) == "Vector2" then
+ priceStr = ("%d-%d"):format(priceRaw.X, priceRaw.Y)
+ else
+ priceStr = tostring(priceRaw or "?")
+ end
+ local label = ("[SC:%s] [$ %s]"):format(tostring(spawnChance), priceStr)
+ table.insert(Vehicles, label)
+ VehiclesInstances[label] = Veh
+ end
+ end
+ end
 end
 
--- 3. ลูปตรวจจับเกมจบเพื่อกดเริ่มด่านเดิมใหม่วนไป (Auto Replay Loop)
-local function startReplayMonitor()
-    task.spawn(function()
-        while true do
-            task.wait(2)
-            if not MacroConfig.IsRunning then break end
-            
-            pcall(function()
-                -- ตรวจเช็คว่า UI สรุปคะแนนหรือ FinishFrame โผล่ขึ้นมาหรือยัง
-                local guiHUD = Player.PlayerGui:FindFirstChild("HUD")
-                local finishFrame = guiHUD and (guiHUD:FindFirstChild("FinishedFrame") or guiHUD:FindFirstChild("WinFrame"))
-                
-                if finishFrame and finishFrame.Visible then
-                    print("[PK-MACRO] จบด่านแล้ว! กำลังกด Replay เริ่มลูปใหม่ใน 3 วินาที...")
-                    task.wait(3)
-                    
-                    local replayRemote = ReplicatedStorage:FindFirstChild("Remotes") and ReplicatedStorage.Remotes:FindFirstChild("Replay")
-                    if replayRemote then
-                        replayRemote:FireServer()
-                    end
-                end
-            end)
-        end
-    end)
+local function pressEnter(btn)
+ Gui.SelectedCoreObject = btn
+ VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+ task.wait(0.5)
+ VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
+ task.wait(0.1)
+ Gui.SelectedCoreObject = nil
 end
 
--- ── ระบบจัดการลูปทำงานหลักแบบ One-Click ─────────────────────────────────────────
-local function runMainMacroProcess()
-    print("[PK-MACRO] เริ่มกระบวนการฟาร์มมาโครออโต้...")
-    
-    -- เปิดระบบมอนิเตอร์ปุ่มกดเริ่มเกมใหม่รอไว้เลย
-    startReplayMonitor()
-    
-    while MacroConfig.IsRunning do
-        pcall(function()
-            local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-            if root then
-                -- ขั้นตอนที่ 1: เดินไปจุดยุทธศาสตร์ย่อย หรือวางยูนิตตัวแรกใต้เท้าทันที
-                autoPlaceUnit(MacroConfig.UnitSlot, root.CFrame * CFrame.new(0, -3, -4))
-                task.wait(5)
-                
-                -- ขั้นตอนที่ 2: สั่งอัปเกรดรัวๆ ทุกตัวที่วางไว้กินตังค์ในเกม
-                autoUpgradeAll()
-            end
-        end)
-        task.wait(10) -- หน่วงเวลาเช็คลูปทุกๆ 10 วินาทีป้องกันสคริปต์หลุด
-    end
+local function waitForPartModel(partName, timeout)
+ local elapsed, POLL = 0, 0.3
+ while elapsed < timeout do
+ for _, child in pairs(MoveableParts:GetChildren()) do
+ if child.Name == partName and child:GetAttribute("Owner") == Player.Name then
+ return child
+ end
+ end
+ task.wait(POLL)
+ elapsed = elapsed + POLL
+ end
+ warn(("[waitForPartModel] Timed out waiting for '%s' (%ds)"):format(partName, timeout))
+ return nil
 end
 
--- ── Wind UI Setup ─────────────────────────────────────────────────────────────
+local function buildMachineSlots(building)
+ local slots = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
+ for _, station in pairs(building:GetChildren()) do
+ if station.Name:match("^Station%d+$") then
+ for _, machine in pairs(station:GetChildren()) do
+ if slots[machine.Name] then
+ table.insert(slots[machine.Name], { station = station, model = machine })
+ end
+ end
+ end
+ end
+ for mtype, list in pairs(slots) do
+ print(("[Slots] %s -> %d machine(s)"):format(mtype, #list))
+ end
+ return slots
+end
 
+local function resolveMachineIO(machine)
+ local detector = machine:FindFirstChild("Detector")
+ local cd = machine:FindFirstChildWhichIsA("ClickDetector", true)
+ if not cd then
+ local btn = machine:FindFirstChild("Button")
+ if btn then cd = btn:FindFirstChildWhichIsA("ClickDetector") end
+ end
+ if not cd then
+ local faucet = machine:FindFirstChild("Faucet")
+ if faucet then cd = faucet:FindFirstChildWhichIsA("ClickDetector") end
+ end
+ if not detector then detector = machine:FindFirstChildWhichIsA("BasePart") end
+ return detector, cd
+end
+
+local function repairSinglePart(partModel, detector, clickDetector, safeBase, index)
+ if partModel:IsA("Model") then partModel:PivotTo(detector.CFrame)
+ else partModel.CFrame = detector.CFrame end
+
+ task.wait(WARP_SETTLE)
+
+ local elapsed, POLL = 0, 0.2
+ while elapsed < 10 do
+ local pos = partModel:IsA("Model") and partModel:GetPivot().Position or partModel.Position
+ if (pos - detector.CFrame.Position).Magnitude < 3 then break end
+ task.wait(POLL)
+ elapsed = elapsed + POLL
+ end
+
+ fireclickdetector(clickDetector)
+ print((" [Repair] %s -> %s / %s"):format(
+ partModel.Name, detector.Parent.Parent.Name, detector.Parent.Name))
+
+ task.wait(REPAIR_WAIT)
+
+ local safePos = CFrame.new(safeBase + Vector3.new(index * SAFE_OFFSET, 0, 0))
+ if partModel:IsA("Model") then partModel:PivotTo(safePos)
+ else partModel.CFrame = safePos end
+ task.wait(0.3)
+end
+
+local function runSlot(slotInfo, partSubList, safeBase, slotIndex)
+ local detector, cd = resolveMachineIO(slotInfo.model)
+ if not detector or not cd then
+ warn(("[Slot] %s / %s : could not resolve IO"):format(
+ slotInfo.station.Name, slotInfo.model.Name))
+ return
+ end
+ for i, partData in ipairs(partSubList) do
+ local model = waitForPartModel(partData.Name, FIND_PART_TIMEOUT)
+ if model then
+ repairSinglePart(model, detector, cd, safeBase, slotIndex * 100 + i)
+ print((" [%s / %s] %d / %d done: %s"):format(
+ slotInfo.station.Name, slotInfo.model.Name, i, #partSubList, partData.Name))
+ else
+ warn((" Skipping '%s' (timeout)"):format(partData.Name))
+ end
+ end
+ print(("[Slot] %s / %s complete"):format(slotInfo.station.Name, slotInfo.model.Name))
+end
+
+local function distributeToSlots(slots, queues)
+ local assignments = {}
+ for machineType, partList in pairs(queues) do
+ local machineSlots = slots[machineType]
+ if not machineSlots or #machineSlots == 0 then
+ warn(("No slots available for '%s'"):format(machineType))
+ else
+ local slotAssign = {}
+ for _, slot in ipairs(machineSlots) do
+ local entry = { slot = slot, parts = {} }
+ table.insert(slotAssign, entry)
+ table.insert(assignments, entry)
+ end
+ for i, partData in ipairs(partList) do
+ local idx = ((i - 1) % #slotAssign) + 1
+ table.insert(slotAssign[idx].parts, partData)
+ end
+ end
+ end
+ return assignments
+end
+
+local function removeAllPartsRaw(EngineBay)
+ local vehicle = findPlayerVehicle()
+ if not vehicle then return end
+ for _, part in pairs(EngineBay:GetChildren()) do
+ if vehicle:FindFirstChild("PartsEvent") then
+ vehicle.PartsEvent:FireServer("RemovePart", part.Name)
+ print(" Removed: " .. part.Name)
+ task.wait(REMOVE_DELAY)
+ end
+ end
+ task.wait(POST_REMOVE_WAIT)
+end
+
+local function reinstallAllParts()
+ print("[Reinstall] Installing parts back into vehicle...")
+ local PlayerVehicle = findPlayerVehicle()
+ if not PlayerVehicle then warn("[Reinstall] No vehicle found."); return end
+
+ local partsFound = 0
+ for _, v in pairs(MoveableParts:GetChildren()) do
+ if v:GetAttribute("Owner") == Player.Name then
+ VehFolder
+ :WaitForChild(PlayerVehicle.Name)
+ :WaitForChild("PartsEvent")
+ :FireServer("ReapplyPart", v)
+ print(" Installed: " .. v.Name)
+ partsFound = partsFound + 1
+ task.wait(0.1)
+ end
+ end
+ if partsFound == 0 then
+ print("[Reinstall] No parts found in MoveableParts.")
+ else
+ print(("[Reinstall] %d part(s) installed successfully."):format(partsFound))
+ end
+end
+
+local function tpVeh()
+ local PlayerVehicle = findPlayerVehicle()
+ if not PlayerVehicle then
+ warn("[SpawnVehicle] No active vehicle found.")
+ return
+ end
+ local vehicleData = GarageFolder:WaitForChild(PlayerVehicle.Name)
+ local args = {
+ vehicleData,
+ Player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 15)
+ }
+ ReplicatedStorage
+ :WaitForChild("Events")
+ :WaitForChild("Vehicles")
+ :WaitForChild("RemoteLoad")
+ :InvokeServer(unpack(args))
+ print("[SpawnVehicle] Request sent.")
+end
+
+local function findNearestPrompt(modelFolder)
+ local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+ if not root then return nil end
+ local nearest, nearestDist = nil, math.huge
+ for _, child in pairs(modelFolder:GetChildren()) do
+ local promptPart = child:FindFirstChild("Prompt")
+ if promptPart then
+ local pp = promptPart:FindFirstChildWhichIsA("ProximityPrompt")
+ if pp then
+ local ok, pos = pcall(function() return child:GetPivot().Position end)
+ if not ok then
+ local bp = child:FindFirstChildWhichIsA("BasePart")
+ if bp then ok = true; pos = bp.Position end
+ end
+ if ok then
+ local dist = (pos - root.Position).Magnitude
+ if dist < nearestDist then
+ nearestDist = dist
+ nearest = pp
+ end
+ end
+ end
+ end
+ end
+ return nearest
+end
+
+-- [[ UI Setup ]]
 local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/releases/latest/download/main.lua"))()
+
 local Window = WindUI:CreateWindow({
-    Title  = "PK ASTD MACRO GOD-MODE",
-    Icon   = "swords",
-    Author = "PK Modified",
-    Folder = "PK_ASTD_Macro",
-    Size   = UDim2.fromOffset(580, 460),
-    Theme  = "Dark",
+ Title = "Garage Manager",
+ Icon = "wrench",
+ Author = "Auto Script",
+ Folder = "GarageManager",
+ Size = UDim2.fromOffset(580, 460),
+ Theme = "Dark",
 })
 
-local MacroTab = Window:Tab({ Title = "Auto Farm", Icon = "zap" })
+local JunkTab = Window:Tab({ Title = "Junkyard", Icon = "car" })
 
-MacroTab:Paragraph({
-    Title = "วิธีใช้งานมาโครกันป้อมออโต้",
-    Desc  = "1. ติดยูนิตหลักไว้ที่ช่องสล็อต 1\n2. เข้าไปในด่าน Story หรือ Infinite\n3. กดปุ่มด้านล่างนี้เพียงปุ่มเดียว ระบบจะทำการวาง ยืนอัปเกรด และกดเริ่มเกมใหม่ให้เองทั้งหมดโบร!"
+scanVehicles()
+
+local SelectedVehicle = nil
+
+local Dropdown = JunkTab:Dropdown({
+ Title = "Available Vehicles",
+ Values = Vehicles,
+ Callback = function(selected)
+ SelectedVehicle = selected
+ print("[Junkyard] Selected: " .. selected)
+ end
 })
 
--- 🚀 ปุ่มกดเริ่มทำงานรอบเดียวจบ (One-Click Control Toggle)
-MacroTab:Toggle({
-    Title    = "🚀 START AUTO FARM MACRO",
-    Callback = function(state)
-        MacroConfig.IsRunning = state
-        if state then
-            task.spawn(runMainMacroProcess)
-        else
-            print("[PK-MACRO] ปิดระบบทำงานบอทมาโครแล้วโบร")
-        end
-    end
+JunkTab:Button({
+ Title = "Refresh Listings",
+ Icon = "refresh-ccw",
+ Callback = function()
+ scanVehicles()
+ Dropdown:Refresh(Vehicles)
+ SelectedVehicle = nil
+ print("[Junkyard] List refreshed. Found " .. #Vehicles .. " vehicle(s).")
+ end
 })
 
-MacroTab:Slider({
-    Title    = "ตั้งค่ารอบกดอัปเกรดรัวๆ (รอบต่อยูนิต)",
-    Min      = 1,
-    Max      = 10,
-    Value    = MacroConfig.UpgradeLoops,
-    Callback = function(value)
-        MacroConfig.UpgradeLoops = value
-    end
+JunkTab:Button({
+ Title = "Inspect Vehicle",
+ Icon = "arrow-up-right",
+ Callback = function()
+ if not SelectedVehicle then print("[Junkyard] No vehicle selected."); return end
+ local targetVeh = VehiclesInstances[SelectedVehicle]
+ if targetVeh and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
+ local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+ if root then
+ root.CFrame = targetVeh.Body.Plate.CFrame
+ print("[Junkyard] Teleported to: " .. SelectedVehicle)
+ end
+ else
+ print("[Junkyard] Vehicle no longer available.")
+ end
+ end
 })
 
--- บายพาสระบบกันหลุดออกจากเกมกรณีฟาร์มข้ามคืน (Anti-AFK Bypass)
-pcall(function()
-    local VirtualUser = game:GetService("VirtualUser")
-    Player.Idled:Connect(function()
-        VirtualUser:CaptureController()
-        VirtualUser:ClickButton2(Vector2.new(0,0))
-        print("[PK-SYSTEM] ป้องกันการเตะออกจากเซิร์ฟเวอร์เรียบร้อยไอ่สัส!")
-    end)
-end)
+JunkTab:Button({
+ Title = "Purchase Vehicle",
+ Icon = "shopping-cart",
+ Callback = function()
+ if not SelectedVehicle then print("[Junkyard] No vehicle selected."); return end
+ local targetVeh = VehiclesInstances[SelectedVehicle]
+ if not targetVeh or not targetVeh:IsDescendantOf(VehFolder) then
+ print("[Junkyard] Vehicle is no longer available."); return
+ end
 
-print("[PK ASTD Hub] โหลดเมนูและสคริปต์มาโครเรียบร้อย ลุยเลยโบร!")
+ local vehName = targetVeh.Name
+ local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+ if root and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
+ root.CFrame = targetVeh.Body.Plate.CFrame
+ end
+ task.wait(0.4)
+
+ if targetVeh:FindFirstChild("ClickDetector") then
+ fireclickdetector(targetVeh.ClickDetector)
+ end
+ task.wait(0.4)
+ pressEnter(ConfirmBtnPath)
+
+ local success, elapsed = false, 0
+ repeat
+ task.wait(0.1)
+ elapsed = elapsed + 0.1
+ if not VehFolder:FindFirstChild(vehName) and GarageFolder:FindFirstChild(vehName) then
+ success = true; break
+ end
+ until elapsed > 4
+
+ if success then
+ print("[Junkyard] Purchase successful: " .. SelectedVehicle)
+ scanVehicles(); Dropdown:Refresh(Vehicles); SelectedVehicle = nil
+ else
+ print("[Junkyard] Purchase failed or timed out.")
+ end
+ end
+})
+
+local Automatically = Window:Tab({ Title = "Automation", Icon = "bot" })
+
+_G.autoLoopRunning = false
+_G.WaitAfterPaint = 150
+_G.minSpawnChance = 50
+
+Automatically:Slider({
+ Title = "Max Spawn Chance Filter",
+ Step = 1,
+ Value = { Min = 1, Max = 100, Default = 50 },
+ Callback = function(val)
+ _G.minSpawnChance = val
+ print("[AutoLoop] Spawn chance filter set to: " .. val)
+ end
+})
+
+local lastSliderVal = 150
+
+local HoldSlider = Automatically:Slider({
+ Title = "Hold Duration Before Sale (s)",
+ Desc = "Duration: 150s",
+ Step = 1,
+ Value = { Min = 1, Max = 200, Default = 150 },
+ Callback = function(val)
+ local diff = val - lastSliderVal
+ _G.WaitAfterPaint = val
+ lastSliderVal = val
+ 
+if _G.autoLoopRunning and targetEndTime > 0 then
+ targetEndTime = targetEndTime + diff
+ else
+ HoldSlider:SetDesc(("Duration: %ds"):format(val))
+ end
+ end
+})
+
+Automatically:Toggle({
+ Title = "Auto Farm — Acquire · Restore · Paint · Sell",
+ Icon = "repeat",
+ Default = false,
+ Callback = function(state)
+ _G.autoLoopRunning = state
+ if not state then
+ if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
+ targetEndTime = 0
+ HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint or 150))
+ print("[AutoLoop] Stopped instantly by user.")
+ return
+ end
+
+ scriptLoopId = scriptLoopId + 1
+ local currentId = scriptLoopId
+
+ print("[AutoLoop] Started.")
+ task.spawn(function()
+ while _G.autoLoopRunning and scriptLoopId == currentId do
+
+ local currentVehicle = findPlayerVehicle()
+ local skipToRestoration = false
+
+ if currentVehicle then
+ print("[AutoLoop] Detect active vehicle: " .. currentVehicle.Name .. " -> Skipping Acquisition.")
+ skipToRestoration = true
+ end
+
+ if not skipToRestoration then
+ scanVehicles()
+ local targetLabel, targetVeh = nil, nil
+ for label, veh in pairs(VehiclesInstances) do
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ local sc = veh:GetAttribute("SpawnChance") or 0
+ if sc <= _G.minSpawnChance then
+ targetLabel = label
+ targetVeh = veh
+ break
+ end
+ end
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ if not targetVeh then
+ print("[AutoLoop] No eligible vehicle found (SC <= " .. _G.minSpawnChance .. "). Retrying in 5s...")
+ task.wait(5)
+ continue 
+end
+
+ print("[AutoLoop] Eligible vehicle located: " .. targetLabel)
+
+ local vehName = targetVeh.Name
+ local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+ if root and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
+ root.CFrame = targetVeh.Body.Plate.CFrame
+ print("[AutoLoop] Teleported to vehicle plate.")
+ end
+ task.wait(0.8)
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ if targetVeh:FindFirstChild("ClickDetector") then
+ fireclickdetector(targetVeh.ClickDetector)
+ print("[AutoLoop] Clicked vehicle ClickDetector.")
+ end
+ task.wait(0.8)
+
+ local playerGui = Player:FindFirstChild("PlayerGui")
+ local confirmBtn = playerGui and playerGui:FindFirstChild("HUD") 
+and playerGui.HUD:FindFirstChild("Frames") 
+and playerGui.HUD.Frames:FindFirstChild("Confirmation") 
+and playerGui.HUD.Frames.Confirmation:FindFirstChild("Confirm")
+
+ if confirmBtn and confirmBtn:IsDescendantOf(playerGui) then
+ print("[AutoLoop] Confirmation button found. Pressing Enter...")
+ pressEnter(confirmBtn)
+ else
+ warn("[AutoLoop] Error: Confirmation UI did not appear or is invalid. Retrying...")
+ task.wait(2)
+ continue
+ end
+
+ local bought, elapsed = false, 0
+ repeat
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ task.wait(0.2)
+ elapsed = elapsed + 0.2
+ currentVehicle = findPlayerVehicle()
+ if currentVehicle or GarageFolder:FindFirstChild(vehName) then
+ bought = true
+ break
+ end
+ until elapsed > 5
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ if not bought then
+ print("[AutoLoop] Acquisition failed. Retrying...")
+ task.wait(3)
+ continue
+ end
+ print("[AutoLoop] Vehicle acquired: " .. targetLabel)
+
+ print("[AutoLoop] Waiting for vehicle to register...")
+ task.wait(5)
+ end
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ print("[AutoLoop] Initiating restoration sequence...")
+
+ Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1076, 5, -414)
+ task.wait(1)
+
+ local vehicle = findPlayerVehicle()
+ if vehicle then
+ local building = Workspace.Map.FirstCity.Buildings["PitStop(Large)"]
+ local EngineBay = vehicle.Body.EngineBay
+ local charRoot = Player.Character:FindFirstChild("HumanoidRootPart")
+ local safeBase = charRoot and charRoot.Position or Vector3.new(0, 100, 0)
+ local slots = buildMachineSlots(building)
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ removeAllPartsRaw(EngineBay)
+
+ local queues = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
+ local total = 0
+ for _, child in pairs(MoveableParts:GetChildren()) do
+ if child:GetAttribute("Owner") == Player.Name then
+ local rType = child:GetAttribute("RepairMachine")
+ if rType and queues[rType] then
+ table.insert(queues[rType], { Name = child.Name })
+ total = total + 1
+ end
+ end
+ end
+
+ if total > 0 and _G.autoLoopRunning and scriptLoopId == currentId then
+ local assignments = distributeToSlots(slots, queues)
+ local doneCount, totalAssign = 0, #assignments
+ for idx, assign in ipairs(assignments) do
+ if #assign.parts > 0 then
+ task.spawn(function()
+ runSlot(assign.slot, assign.parts, safeBase, idx)
+ doneCount = doneCount + 1
+ end)
+ else
+ doneCount = doneCount + 1
+ end
+ end
+ while doneCount < totalAssign and _G.autoLoopRunning and scriptLoopId == currentId do task.wait(0.5) end
+ end
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ reinstallAllParts()
+ task.wait(0.5)
+ reinstallAllParts()
+ else
+ print("[AutoLoop] ERROR: Vehicle not found in workspace for repair.")
+ end
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ print("[AutoLoop] Restoration complete. Cooling down...")
+ task.wait(3)
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ print("[AutoLoop] Initiating paint process...")
+
+ Player.Character.HumanoidRootPart.CFrame = CFrame.new(
+ -990.619568, 4.53032351, -387.379364,
+ 0.350393713, -8.45001722e-08, -0.936602473,
+ -4.68328265e-09, 1, -9.19719554e-08,
+ 0.936602473, 3.66127715e-08, 0.350393713
+ )
+ task.wait(0.5)
+ tpVeh()
+ task.wait(2)
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ local model = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
+ local paintPrompt = findNearestPrompt(model)
+ if paintPrompt then
+ fireproximityprompt(paintPrompt)
+ else
+ warn("[AutoLoop] No paint ProximityPrompt found near player.")
+ end
+ task.wait(0.5)
+ 
+local paintConfirm = Player.PlayerGui:FindFirstChild("HUD") and Player.PlayerGui.HUD.Frames.Paint.Confirm
+ if paintConfirm then pressEnter(paintConfirm) end
+
+ print("[AutoLoop] Paint applied. Holding for " .. _G.WaitAfterPaint .. "s...")
+
+ targetEndTime = os.clock() + _G.WaitAfterPaint
+ local isWaiting = true
+ local lastSecText = -1
+ 
+if countdownConnection then countdownConnection:Disconnect() end
+ 
+countdownConnection = RunService.RenderStepped:Connect(function()
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then
+ isWaiting = false
+ if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
+ return
+ end
+ 
+local now = os.clock()
+ local remainingFloat = targetEndTime - now
+ local remainingInt = math.ceil(remainingFloat)
+ 
+if remainingFloat <= 0 then
+ isWaiting = false
+ if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
+ return
+ end
+ 
+if remainingInt ~= lastSecText then
+ HoldSlider:SetDesc(("⏳ Remaining: %ds / %ds"):format(remainingInt, _G.WaitAfterPaint))
+ lastSecText = remainingInt
+ end
+ end)
+ 
+while isWaiting do task.wait() end
+ 
+targetEndTime = 0
+ HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint))
+ -- ────────────────────────────────────────────────────────────
+
+ if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ print("[AutoLoop] Proceeding to sale...")
+
+ Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1915, 4, -785)
+ task.wait(0.5)
+ tpVeh()
+ task.wait(1)
+ 
+if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+ fireproximityprompt(workspace.Utils.SellCar.Prompt.ProximityPrompt)
+ task.wait(0.8)
+ 
+local sellConfirm = Player.PlayerGui:FindFirstChild("HUD") and Player.PlayerGui.HUD.Frames.Confirmation.Confirm
+ if sellConfirm then
+ pressEnter(sellConfirm)
+ end
+ task.wait(0.5)
+ Gui.SelectedCoreObject = nil
+
+ local sellCheck, sellElapsed = false, 0
+ repeat
+ task.wait(0.2)
+ sellElapsed = sellElapsed + 0.2
+ if not findPlayerVehicle() then
+ sellCheck = true
+ break
+ end
+ until sellElapsed > 5 or not _G.autoLoopRunning or scriptLoopId ~= currentId
+
+ if sellCheck then
+ print("[AutoLoop] Sale confirmed. Restarting cycle...")
+ else
+ print("[AutoLoop] WARNING: Vehicle still detected after sale!")
+ end
+
+ task.wait(3)
+ end
+
+ if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
+ HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint or 150))
+ print("[AutoLoop] Automation stopped completely.")
+ end)
+ end
+})
+
+Automatically:Divider()
+
+
+_G.targetPercentage = 5
+
+local Input = Automatically:Input({
+ Title = "Inputb Percentage",
+ Desc = "",
+ Value = "5",
+ InputIcon = "car",
+ Type = "Input",
+ Placeholder = "Enter percentage...",
+ Callback = function(input) 
+local num = tonumber(input)
+ if num then
+ _G.targetPercentage = num
+ else
+ _G.targetPercentage = 5
+ end
+ end
+})
+
+Automatically:Toggle({
+ Title = "Auto Purchase 5%+ Spawn Chance Vehicles",
+ Icon = "repeat",
+ Default = false,
+ Callback = function(state)
+ _G.autoBuyRunning = state
+
+ if not state then
+ return
+ end
+
+ task.spawn(function()
+ while _G.autoBuyRunning do
+
+ scanVehicles()
+
+ local targetLabel, targetVeh = nil, nil
+ for label, veh in pairs(VehiclesInstances) do
+ local sc = veh:GetAttribute("SpawnChance") or math.huge
+ if sc <= (_G.targetPercentage or 5) then
+ targetLabel = label
+ targetVeh = veh
+ break
+ end
+ end
+
+ if not targetVeh then
+ task.wait(0.1)
+ continue
+ end
+
+ local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+ if root and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
+ root.CFrame = targetVeh.Body.Plate.CFrame
+ end
+ task.wait(0.15)
+
+ if targetVeh:FindFirstChild("ClickDetector") then
+ fireclickdetector(targetVeh.ClickDetector)
+ end
+ task.wait(0.15)
+
+ local playerGui = Player:FindFirstChild("PlayerGui")
+ local confirmBtn = playerGui
+ and playerGui:FindFirstChild("HUD")
+ and playerGui.HUD:FindFirstChild("Frames")
+ and playerGui.HUD.Frames:FindFirstChild("Confirmation")
+ and playerGui.HUD.Frames.Confirmation:FindFirstChild("Confirm")
+
+ if confirmBtn and confirmBtn:IsDescendantOf(playerGui) then
+ pressEnter(confirmBtn)
+ else
+ task.wait(0.5)
+ continue
+ end
+
+ local vehName = targetVeh.Name
+ local bought, elapsed = false, 0
+ repeat
+ task.wait(0.1)
+ elapsed = elapsed + 0.1
+ if GarageFolder:FindFirstChild(vehName) or findPlayerVehicle() then
+ bought = true
+ break
+ end
+ until elapsed > 3
+
+ if bought then
+ break
+ else
+ task.wait(1)
+ end
+ end
+
+ _G.autoBuyRunning = false
+ end)
+ end
+})
+Automatically:Divider()
+
+Automatically:Button({
+ Title = "Repair Vehicle",
+ Icon = "settings",
+ Callback = function()
+ task.spawn(function()
+ Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1076, 5, -414)
+ local vehicle = findPlayerVehicle()
+ if not vehicle then warn("[Repair] No active vehicle found."); return end
+
+ local building = Workspace.Map.FirstCity.Buildings["PitStop(Large)"]
+ local EngineBay = vehicle.Body.EngineBay
+ local charRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+ local safeBase = charRoot and charRoot.Position or Vector3.new(0, 100, 0)
+ local slots = buildMachineSlots(building)
+
+ print("[Repair] Removing installed components...")
+ removeAllPartsRaw(EngineBay)
+
+ local queues = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
+ local total = 0
+ for _, child in pairs(MoveableParts:GetChildren()) do
+ if child:GetAttribute("Owner") == Player.Name then
+ local rType = child:GetAttribute("RepairMachine")
+ if rType and queues[rType] then
+ table.insert(queues[rType], { Name = child.Name })
+ total = total + 1
+ end
+ end
+ end
+ if total == 0 then warn("[Repair] No repairable parts detected."); return end
+
+ print("[Repair] Processing " .. total .. " component(s)...")
+ local assignments = distributeToSlots(slots, queues)
+ local doneCount = 0
+ local totalAssign = #assignments
+ for idx, assign in ipairs(assignments) do
+ if #assign.parts > 0 then
+ task.spawn(function()
+ runSlot(assign.slot, assign.parts, safeBase, idx)
+ doneCount = doneCount + 1
+ end)
+ else
+ doneCount = doneCount + 1
+ end
+ end
+ while doneCount < totalAssign do task.wait(0.5) end
+
+ print("[Repair] Reinstalling components...")
+ reinstallAllParts()
+ reinstallAllParts()
+ print("[Repair] Restoration complete.")
+ end)
+ end
+})
+
+Automatically:Button({
+ Title = "Apply Paint",
+ Icon = "paintbrush",
+ Callback = function()
+ task.spawn(function()
+ Player.Character.HumanoidRootPart.CFrame = CFrame.new(
+ -990.619568, 4.53032351, -387.379364,
+ 0.350393713, -8.45001722e-08, -0.936602473,
+ -4.68328265e-09, 1, -9.19719554e-08,
+ 0.936602473, 3.66127715e-08, 0.350393713
+ )
+ tpVeh()
+ task.wait(2)
+
+ local model = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
+ local paintPrompt = findNearestPrompt(model)
+ if paintPrompt then
+ fireproximityprompt(paintPrompt)
+ else
+ warn("[Paint] No paint ProximityPrompt found near player.")
+ end
+ task.wait(0.5)
+ pressEnter(Player.PlayerGui.HUD.Frames.Paint.Confirm)
+ end)
+ end
+})
+
+Automatically:Button({
+ Title = "Sell Vehicle",
+ Icon = "dollar-sign",
+ Callback = function()
+ Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1915, 4, -785)
+ tpVeh()
+ task.wait(0.4)
+ fireproximityprompt(workspace.Utils.SellCar.Prompt.ProximityPrompt)
+ task.wait(0.4)
+ pressEnter(ConfirmBtnPath)
+ task.wait(0.5)
+ Gui.SelectedCoreObject = nil
+ end
+})
+
+local VehTab = Window:Tab({ Title = "Vehicle", Icon = "box" })
+
+VehTab:Button({
+ Title = "Deploy Vehicle",
+ Icon = "refresh-cw",
+ Callback = function()
+ task.spawn(tpVeh)
+ end
+})
+
+VehTab:Button({
+ Title = "Locate Vehicle",
+ Icon = "map-pin",
+ Callback = function()
+ local v = findPlayerVehicle()
+ if not v then print("[Vehicle] No active vehicle found."); return end
+ local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+ if root and v:FindFirstChild("Body") and v.Body:FindFirstChild("Plate") then
+ root.CFrame = v.Body.Plate.CFrame
+ print("[Vehicle] Teleported to: " .. v.Name)
+ end
+ end
+})
+
+VehTab:Button({
+ Title = "Install Components",
+ Icon = "arrow-down-to-line",
+ Callback = function()
+ task.spawn(reinstallAllParts)
+ task.spawn(reinstallAllParts)
+ end
+})
+
+print("[Garage Manager] Loaded successfully.")
+
+```
