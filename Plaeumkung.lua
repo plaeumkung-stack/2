@@ -4,6 +4,7 @@ local Gui                 = game:GetService("GuiService")
 local ReplicatedStorage   = game:GetService("ReplicatedStorage")
 local Workspace           = game:GetService("Workspace")
 local RunService          = game:GetService("RunService")
+local VIM                 = game:GetService("VirtualInputManager")
 
 local Player        = Players.LocalPlayer
 local VehFolder     = Workspace.Vehicles
@@ -82,13 +83,13 @@ end
 local function buildMachineSlots(building)
     local slots = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
     for _, station in pairs(building:GetChildren()) do
-        if station.Name:match("^Station%d+$") then
+         if station.Name:match("^Station%d+$") then
             for _, machine in pairs(station:GetChildren()) do
                 if slots[machine.Name] then
                     table.insert(slots[machine.Name], { station = station, model = machine })
                 end
             end
-        end
+       end
     end
     for mtype, list in pairs(slots) do
         print(("[Slots] %s -> %d machine(s)"):format(mtype, #list))
@@ -119,7 +120,7 @@ local function repairSinglePart(partModel, detector, clickDetector, safeBase, in
 
     local elapsed, POLL = 0, 0.2
     while elapsed < 10 do
-        local pos = partModel:IsA("Model") and partModel:GetPivot().Position or partModel.Position
+       local pos = partModel:IsA("Model") and partModel:GetPivot().Position or partModel.Position
         if (pos - detector.CFrame.Position).Magnitude < 3 then break end
         task.wait(POLL)
         elapsed = elapsed + POLL
@@ -146,7 +147,7 @@ local function runSlot(slotInfo, partSubList, safeBase, slotIndex)
     end
     for i, partData in ipairs(partSubList) do
         local model = waitForPartModel(partData.Name, FIND_PART_TIMEOUT)
-        if model then
+         if model then
             repairSinglePart(model, detector, cd, safeBase, slotIndex * 100 + i)
             print(("  [%s / %s] %d / %d done: %s"):format(
                 slotInfo.station.Name, slotInfo.model.Name, i, #partSubList, partData.Name))
@@ -165,7 +166,7 @@ local function distributeToSlots(slots, queues)
             warn(("No slots available for '%s'"):format(machineType))
         else
             local slotAssign = {}
-            for _, slot in ipairs(machineSlots) do
+             for _, slot in ipairs(machineSlots) do
                 local entry = { slot = slot, parts = {} }
                 table.insert(slotAssign, entry)
                 table.insert(assignments, entry)
@@ -204,7 +205,7 @@ local function reinstallAllParts()
                 :WaitForChild(PlayerVehicle.Name)
                 :WaitForChild("PartsEvent")
                 :FireServer("ReapplyPart", v)
-            print("  Installed: " .. v.Name)
+             print("  Installed: " .. v.Name)
             partsFound = partsFound + 1
             task.wait(0.1)
         end
@@ -218,7 +219,7 @@ end
 
 local function tpVeh()
     local PlayerVehicle = findPlayerVehicle()
-    if not PlayerVehicle then
+     if not PlayerVehicle then
         warn("[SpawnVehicle] No active vehicle found.")
         return
     end
@@ -235,6 +236,14 @@ local function tpVeh()
     print("[SpawnVehicle] Request sent.")
 end
 
+local function jumpCharacter()
+    local char = Player.Character
+    local hum  = char and char:FindFirstChildWhichIsA("Humanoid")
+    if hum then
+        hum:ChangeState("Jumping")
+    end
+end
+
 local function findNearestPrompt(modelFolder)
     local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
     if not root then return nil end
@@ -242,24 +251,24 @@ local function findNearestPrompt(modelFolder)
     for _, child in pairs(modelFolder:GetChildren()) do
         local promptPart = child:FindFirstChild("Prompt")
         if promptPart then
-            local pp = promptPart:FindFirstChildWhichIsA("ProximityPrompt")
+             local pp = promptPart:FindFirstChildWhichIsA("ProximityPrompt")
             if pp then
                 local ok, pos = pcall(function() return child:GetPivot().Position end)
                 if not ok then
                     local bp = child:FindFirstChildWhichIsA("BasePart")
-                    if bp then ok = true; pos = bp.Position end
+                     if bp then ok = true; pos = bp.Position end
                 end
                 if ok then
                     local dist = (pos - root.Position).Magnitude
                     if dist < nearestDist then
-                        nearestDist = dist
+                         nearestDist = dist
                         nearest = pp
                     end
                 end
             end
         end
     end
-    return nearest
+     return nearest
 end
 
 -- [[ UI Setup ]]
@@ -274,6 +283,7 @@ local Window = WindUI:CreateWindow({
     Theme  = "Dark",
 })
 
+-- [[ Junkyard Tab ]]
 local JunkTab = Window:Tab({ Title = "Junkyard", Icon = "car" })
 
 scanVehicles()
@@ -284,7 +294,7 @@ local Dropdown = JunkTab:Dropdown({
     Title    = "Available Vehicles",
     Values   = Vehicles,
     Callback = function(selected)
-        SelectedVehicle = selected
+         SelectedVehicle = selected
         print("[Junkyard] Selected: " .. selected)
     end
 })
@@ -308,7 +318,7 @@ JunkTab:Button({
         local targetVeh = VehiclesInstances[SelectedVehicle]
         if targetVeh and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
             local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-            if root then
+             if root then
                 root.CFrame = targetVeh.Body.Plate.CFrame
                 print("[Junkyard] Teleported to: " .. SelectedVehicle)
             end
@@ -319,7 +329,7 @@ JunkTab:Button({
 })
 
 JunkTab:Button({
-    Title    = "Purchase Vehicle",
+     Title    = "Purchase Vehicle",
     Icon     = "shopping-cart",
     Callback = function()
         if not SelectedVehicle then print("[Junkyard] No vehicle selected."); return end
@@ -336,7 +346,7 @@ JunkTab:Button({
         task.wait(0.4)
 
         if targetVeh:FindFirstChild("ClickDetector") then
-            fireclickdetector(targetVeh.ClickDetector)
+             fireclickdetector(targetVeh.ClickDetector)
         end
         task.wait(0.4)
         pressEnter(ConfirmBtnPath)
@@ -346,7 +356,7 @@ JunkTab:Button({
             task.wait(0.1)
             elapsed = elapsed + 0.1
             if not VehFolder:FindFirstChild(vehName) and GarageFolder:FindFirstChild(vehName) then
-                success = true; break
+                 success = true; break
             end
         until elapsed > 4
 
@@ -359,18 +369,20 @@ JunkTab:Button({
     end
 })
 
+-- [[ Automation Tab ]]
 local Automatically = Window:Tab({ Title = "Automation", Icon = "bot" })
 
 _G.autoLoopRunning = false
 _G.WaitAfterPaint  = 150
 _G.minSpawnChance  = 50
+_G.autoDriveRunning = false
 
 Automatically:Slider({
     Title = "Max Spawn Chance Filter",
     Step  = 1,
     Value = { Min = 1, Max = 100, Default = 50 },
     Callback = function(val)
-        _G.minSpawnChance = val
+         _G.minSpawnChance = val
         print("[AutoLoop] Spawn chance filter set to: " .. val)
     end
 })
@@ -384,7 +396,7 @@ local HoldSlider = Automatically:Slider({
     Value = { Min = 1, Max = 200, Default = 150 },
     Callback = function(val)
         local diff = val - lastSliderVal
-        _G.WaitAfterPaint = val
+         _G.WaitAfterPaint = val
         lastSliderVal = val
         
         if _G.autoLoopRunning and targetEndTime > 0 then
@@ -396,7 +408,7 @@ local HoldSlider = Automatically:Slider({
 })
 
 Automatically:Toggle({
-    Title    = "Auto Farm  â  Acquire Â· Restore Â· Paint Â· Sell",
+    Title    = "Auto Farm  —  Acquire · Restore · Paint · Sell",
     Icon     = "repeat",
     Default  = false,
     Callback = function(state)
@@ -415,252 +427,510 @@ Automatically:Toggle({
         print("[AutoLoop] Started.")
         task.spawn(function()
             while _G.autoLoopRunning and scriptLoopId == currentId do
+                
+                local sessionVehicles = {} 
+                
+                local startupVeh = findPlayerVehicle()
+                 if startupVeh then
+                    pcall(function()
+                        ReplicatedStorage.Events.Vehicles.RemoteStore:InvokeServer(GarageFolder:WaitForChild(startupVeh.Name))
+                    end)
+                    task.wait(1)
+                 end
 
-                local currentVehicle = findPlayerVehicle()
-                local skipToRestoration = false
-
-                if currentVehicle then
-                    print("[AutoLoop] Detect active vehicle: " .. currentVehicle.Name .. " -> Skipping Acquisition.")
-                    skipToRestoration = true
-                end
-
-                if not skipToRestoration then
+                while _G.autoLoopRunning and scriptLoopId == currentId do
+                    local totalActiveOwned = #GarageFolder:GetChildren()
+                    if totalActiveOwned >=  3 then break end
+                     
                     scanVehicles()
                     local targetLabel, targetVeh = nil, nil
                     for label, veh in pairs(VehiclesInstances) do
-                        if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                        local sc = veh:GetAttribute("SpawnChance") or 0
+                         local sc = veh:GetAttribute("SpawnChance") or 0
                         if sc <= _G.minSpawnChance then
                             targetLabel = label
-                            targetVeh   = veh
+                             targetVeh   = veh
                             break
                         end
                     end
 
-                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                    if not targetVeh then
-                        print("[AutoLoop] No eligible vehicle found (SC <= " .. _G.minSpawnChance .. "). Retrying in 5s...")
-                        task.wait(5)
+                     if not targetVeh then
+                        task.wait(4)
                         continue 
-                    end
-
-                    print("[AutoLoop] Eligible vehicle located: " .. targetLabel)
+                     end
 
                     local vehName = targetVeh.Name
                     local root    = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
                     if root and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
-                        root.CFrame = targetVeh.Body.Plate.CFrame
-                        print("[AutoLoop] Teleported to vehicle plate.")
+                         root.CFrame = targetVeh.Body.Plate.CFrame
                     end
-                    task.wait(0.8)
+                    task.wait(0.6)
 
-                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                     if targetVeh:FindFirstChild("ClickDetector") then
                         fireclickdetector(targetVeh.ClickDetector)
-                        print("[AutoLoop] Clicked vehicle ClickDetector.")
-                    end
-                    task.wait(0.8)
+                     end
+                    task.wait(0.6)
 
                     local playerGui = Player:FindFirstChild("PlayerGui")
                     local confirmBtn = playerGui and playerGui:FindFirstChild("HUD") 
-                        and playerGui.HUD:FindFirstChild("Frames") 
+                         and playerGui.HUD:FindFirstChild("Frames") 
                         and playerGui.HUD.Frames:FindFirstChild("Confirmation") 
                         and playerGui.HUD.Frames.Confirmation:FindFirstChild("Confirm")
 
                     if confirmBtn and confirmBtn:IsDescendantOf(playerGui) then
-                        print("[AutoLoop] Confirmation button found. Pressing Enter...")
                         pressEnter(confirmBtn)
                     else
-                        warn("[AutoLoop] Error: Confirmation UI did not appear or is invalid. Retrying...")
-                        task.wait(2)
-                        continue
+                        task.wait(1)
+                         continue
                     end
 
                     local bought, elapsed = false, 0
                     repeat
-                        if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
                         task.wait(0.2)
-                        elapsed = elapsed + 0.2
-                        currentVehicle = findPlayerVehicle()
-                        if currentVehicle or GarageFolder:FindFirstChild(vehName) then
+                         elapsed = elapsed + 0.2
+                        if GarageFolder:FindFirstChild(vehName) then
                             bought = true
-                            break
+                             break
                         end
-                    until elapsed > 5
+                    until elapsed > 4 or not _G.autoLoopRunning
 
-                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                    if not bought then
-                        print("[AutoLoop] Acquisition failed. Retrying...")
-                        task.wait(3)
-                        continue
-                    end
-                    print("[AutoLoop] Vehicle acquired: " .. targetLabel)
-
-                    print("[AutoLoop] Waiting for vehicle to register...")
-                    task.wait(5)
+                    if bought then
+                        task.wait(1.5)
+                        pcall(function()
+                             local charRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                            if charRoot then
+                                charRoot.CFrame = CFrame.new(-1076, 5, -414)
+                            end
+                        end)
+                        task.wait(1)
+                     end
                 end
 
-                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                print("[AutoLoop] Initiating restoration sequence...")
-
-                Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1076, 5, -414)
-                task.wait(1)
-
-                local vehicle = findPlayerVehicle()
-                if vehicle then
-                    local building  = Workspace.Map.FirstCity.Buildings["PitStop(Large)"]
-                    local EngineBay = vehicle.Body.EngineBay
-                    local charRoot  = Player.Character:FindFirstChild("HumanoidRootPart")
-                    local safeBase  = charRoot and charRoot.Position or Vector3.new(0, 100, 0)
-                    local slots     = buildMachineSlots(building)
-
-                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                    removeAllPartsRaw(EngineBay)
-
-                    local queues = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
-                    local total  = 0
-                    for _, child in pairs(MoveableParts:GetChildren()) do
-                        if child:GetAttribute("Owner") == Player.Name then
-                            local rType = child:GetAttribute("RepairMachine")
-                            if rType and queues[rType] then
-                                table.insert(queues[rType], { Name = child.Name })
-                                total = total + 1
-                            end
-                        end
+                table.clear(sessionVehicles)
+                for _, child in pairs(GarageFolder:GetChildren()) do
+                    if #sessionVehicles < 3 then
+                         table.insert(sessionVehicles, child.Name)
                     end
-
-                    if total > 0 and _G.autoLoopRunning and scriptLoopId == currentId then
-                        local assignments            = distributeToSlots(slots, queues)
-                        local doneCount, totalAssign = 0, #assignments
-                        for idx, assign in ipairs(assignments) do
-                            if #assign.parts > 0 then
-                                task.spawn(function()
-                                    runSlot(assign.slot, assign.parts, safeBase, idx)
-                                    doneCount = doneCount + 1
-                                end)
-                            else
-                                doneCount = doneCount + 1
-                            end
-                        end
-                        while doneCount < totalAssign and _G.autoLoopRunning and scriptLoopId == currentId do task.wait(0.5) end
-                    end
-
-                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                    reinstallAllParts()
-                    task.wait(0.5)
-                    reinstallAllParts()
-                else
-                    print("[AutoLoop] ERROR: Vehicle not found in workspace for repair.")
                 end
 
-                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                print("[AutoLoop] Restoration complete. Cooling down...")
-                task.wait(3)
+                if _G.autoLoopRunning and scriptLoopId == currentId and #sessionVehicles > 0 then
+                     for carIndex, vehName in ipairs(sessionVehicles) do
+                        if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
 
-                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                print("[AutoLoop] Initiating paint process...")
+                        local oldVehicle =  findPlayerVehicle()
+                        if oldVehicle then
+                            pcall(function()
+                                 ReplicatedStorage.Events.Vehicles.RemoteStore:InvokeServer(GarageFolder:WaitForChild(oldVehicle.Name))
+                            end)
+                            task.wait(1.5)
+                         end
 
-                Player.Character.HumanoidRootPart.CFrame = CFrame.new(
-                    -990.619568, 4.53032351, -387.379364,
-                     0.350393713, -8.45001722e-08, -0.936602473,
-                    -4.68328265e-09, 1, -9.19719554e-08,
-                     0.936602473, 3.66127715e-08, 0.350393713
-                )
-                task.wait(0.5)
-                tpVeh()
+                        Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1076, 5, -414)
+                        task.wait(0.5)
+                        
+                         local spawnArgs = { GarageFolder:WaitForChild(vehName), Player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 15) }
+                        ReplicatedStorage.Events.Vehicles.RemoteLoad:InvokeServer(unpack(spawnArgs))
+                        task.wait(2)
+
+                        local vehicle = findPlayerVehicle()
+                         if vehicle then
+                            local building  = Workspace.Map.FirstCity.Buildings["PitStop(Large)"]
+                            local EngineBay = vehicle.Body.EngineBay
+                             local charRoot  = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                            local safeBase  = charRoot and charRoot.Position or Vector3.new(0, 100, 0)
+                            local slots     = buildMachineSlots(building)
+
+                             removeAllPartsRaw(EngineBay)
+
+                            local queues = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
+                            local total  = 0
+                             for _, child in pairs(MoveableParts:GetChildren()) do
+                                if child:GetAttribute("Owner") == Player.Name then
+                                    local rType = child:GetAttribute("RepairMachine")
+                                     if rType and queues[rType] then
+                                        table.insert(queues[rType], { Name = child.Name })
+                                         total = total + 1
+                                    end
+                                end
+                             end
+
+                            if total > 0 and _G.autoLoopRunning and scriptLoopId == currentId then
+                                local assignments             = distributeToSlots(slots, queues)
+                                local doneCount, totalAssign = 0, #assignments
+                                for idx, assign in ipairs(assignments) do
+                                     if #assign.parts > 0 then
+                                        task.spawn(function()
+                                             runSlot(assign.slot, assign.parts, safeBase, idx)
+                                            doneCount = doneCount + 1
+                                        end)
+                                     else
+                                        doneCount = doneCount + 1
+                                     end
+                                end
+                                while doneCount < totalAssign and _G.autoLoopRunning and scriptLoopId == currentId do task.wait(0.5) end
+                             end
+
+                            if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+                            reinstallAllParts()
+                             task.wait(0.5)
+                            reinstallAllParts()
+                        end
+
+                        task.wait(1)
+
+                        Player.Character.HumanoidRootPart.CFrame = CFrame.new(
+                            -990.619568, 4.53032351, -387.379364,
+                             0.350393713, -8.45001722e-08, -0.936602473,
+                             -4.68328265e-09, 1, -9.19719554e-08,
+                             0.936602473, 3.66127715e-08, 0.350393713
+                        )
+                        task.wait(0.5)
+                         
+                        local paintSpawnArgs = { GarageFolder:WaitForChild(vehName), Player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 15) }
+                        ReplicatedStorage.Events.Vehicles.RemoteLoad:InvokeServer(unpack(paintSpawnArgs))
+                         task.wait(2)
+
+                        local model       = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
+                        local paintPrompt = findNearestPrompt(model)
+                        if paintPrompt then
+                             fireproximityprompt(paintPrompt)
+                        end
+                        task.wait(0.5)
+                        
+                         local paintConfirm = Player.PlayerGui:FindFirstChild("HUD") and Player.PlayerGui.HUD.Frames.Paint.Confirm
+                        if paintConfirm then pressEnter(paintConfirm) end
+                         task.wait(2)
+                    end
+                end
+
+                 if _G.autoLoopRunning and scriptLoopId == currentId and #sessionVehicles > 0 then
+                    targetEndTime = os.clock() + _G.WaitAfterPaint
+                    local isWaiting = true
+                    local lastSecText = -1
+                    
+                     if countdownConnection then countdownConnection:Disconnect() end
+                    
+                    countdownConnection = RunService.RenderStepped:Connect(function()
+                        if not _G.autoLoopRunning or scriptLoopId ~= currentId then
+                             isWaiting = false
+                            if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
+                            return
+                         end
+                        
+                        local now = os.clock()
+                        local remainingFloat = targetEndTime - now
+                         local remainingInt = math.ceil(remainingFloat)
+                        
+                        if remainingFloat <= 0 then
+                            isWaiting = false
+                             if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
+                            return
+                        end
+                        
+                       if remainingInt ~= lastSecText then
+                            HoldSlider:SetDesc(("⏳ Remaining: %ds / %ds"):format(remainingInt, _G.WaitAfterPaint))
+                            lastSecText = remainingInt
+                        end
+                     end)
+                    
+                    while isWaiting do task.wait() end
+                    targetEndTime = 0
+                    HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint))
+
+                    for i = #sessionVehicles, 1, -1 do
+                        if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
+                        local targetVehName = sessionVehicles[i]
+                        local activeVeh = findPlayerVehicle()
+                         if activeVeh then
+                            pcall(function()
+                                ReplicatedStorage.Events.Vehicles.RemoteStore:InvokeServer(GarageFolder:WaitForChild(activeVeh.Name))
+                            end)
+                             task.wait(1)
+                        end
+
+                        Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1915, 4, -785)
+                         task.wait(0.5)
+
+                        local sellSpawnArgs = { GarageFolder:WaitForChild(targetVehName), Player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 15) }
+                        local spawnSuccess = pcall(function()
+                            ReplicatedStorage.Events.Vehicles.RemoteLoad:InvokeServer(unpack(sellSpawnArgs))
+                         end)
+                        
+                        if spawnSuccess then
+                            task.wait(1.5)
+                             fireproximityprompt(workspace.Utils.SellCar.Prompt.ProximityPrompt)
+                            task.wait(0.8)
+                            
+                             local sellConfirm = Player.PlayerGui:FindFirstChild("HUD") and Player.PlayerGui.HUD.Frames.Confirmation.Confirm
+                            if sellConfirm then pressEnter(sellConfirm) end
+                            task.wait(0.5)
+                            Gui.SelectedCoreObject =  nil
+
+                            local sellCheck, sellElapsed = false, 0
+                            repeat
+                                task.wait(0.2)
+                                 sellElapsed = sellElapsed + 0.2
+                                if not findPlayerVehicle() then
+                                     sellCheck = true
+                                    break
+                                end
+                            until sellElapsed  > 5 or not _G.autoLoopRunning or scriptLoopId ~= currentId
+                            task.wait(1.5)
+                         end
+                    end
+                end
                 task.wait(2)
-
-                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                local model       = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
-                local paintPrompt = findNearestPrompt(model)
-                if paintPrompt then
-                    fireproximityprompt(paintPrompt)
-                else
-                    warn("[AutoLoop] No paint ProximityPrompt found near player.")
-                end
-                task.wait(0.5)
-                
-                local paintConfirm = Player.PlayerGui:FindFirstChild("HUD") and Player.PlayerGui.HUD.Frames.Paint.Confirm
-                if paintConfirm then pressEnter(paintConfirm) end
-
-                print("[AutoLoop] Paint applied. Holding for " .. _G.WaitAfterPaint .. "s...")
-
-                targetEndTime = os.clock() + _G.WaitAfterPaint
-                local isWaiting = true
-                local lastSecText = -1
-                
-                if countdownConnection then countdownConnection:Disconnect() end
-                
-                countdownConnection = RunService.RenderStepped:Connect(function()
-                    if not _G.autoLoopRunning or scriptLoopId ~= currentId then
-                        isWaiting = false
-                        if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
-                        return
-                    end
-                    
-                    local now = os.clock()
-                    local remainingFloat = targetEndTime - now
-                    local remainingInt = math.ceil(remainingFloat)
-                    
-                    if remainingFloat <= 0 then
-                        isWaiting = false
-                        if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
-                        return
-                    end
-                    
-                    if remainingInt ~= lastSecText then
-                        HoldSlider:SetDesc(("â³ Remaining: %ds / %ds"):format(remainingInt, _G.WaitAfterPaint))
-                        lastSecText = remainingInt
-                    end
-                end)
-                
-                while isWaiting do task.wait() end
-                
-                targetEndTime = 0
-                HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint))
-                -- ââââââââââââââââââââââââââââââââââââââââââââââââââââââââââââ
-
-                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                print("[AutoLoop] Proceeding to sale...")
-
-                Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1915, 4, -785)
-                task.wait(0.5)
-                tpVeh()
-                task.wait(1)
-                
-                if not _G.autoLoopRunning or scriptLoopId ~= currentId then break end
-                fireproximityprompt(workspace.Utils.SellCar.Prompt.ProximityPrompt)
-                task.wait(0.8)
-                
-                local sellConfirm = Player.PlayerGui:FindFirstChild("HUD") and Player.PlayerGui.HUD.Frames.Confirmation.Confirm
-                if sellConfirm then
-                    pressEnter(sellConfirm)
-                end
-                task.wait(0.5)
-                Gui.SelectedCoreObject = nil
-
-                local sellCheck, sellElapsed = false, 0
-                repeat
-                    task.wait(0.2)
-                    sellElapsed = sellElapsed + 0.2
-                    if not findPlayerVehicle() then
-                        sellCheck = true
-                        break
-                    end
-                until sellElapsed > 5 or not _G.autoLoopRunning or scriptLoopId ~= currentId
-
-                if sellCheck then
-                    print("[AutoLoop] Sale confirmed. Restarting cycle...")
-                else
-                    print("[AutoLoop] WARNING: Vehicle still detected after sale!")
-                end
-
-                task.wait(3)
             end
 
             if countdownConnection then countdownConnection:Disconnect(); countdownConnection = nil end
             HoldSlider:SetDesc(("Duration: %ds"):format(_G.WaitAfterPaint or 150))
-            print("[AutoLoop] Automation stopped completely.")
+         end)
+    end
+})
+
+Automatically:Divider()
+
+_G.autoBuyRunning  = false
+_G.targetPercentage = 5
+
+local Input = Automatically:Input({
+    Title       = "Input Percentage",
+    Desc        = "",
+    Value       = "5",
+    InputIcon   = "car",
+    Type        = "Input",
+    Placeholder = "Enter percentage...",
+    Callback    = function(input)
+        local num = tonumber(input)
+         _G.targetPercentage = (num and num > 0) and num or 5
+    end
+})
+
+Automatically:Toggle({
+    Title    = "Auto Purchase 5%+ Spawn Chance Vehicles",
+    Icon     = "repeat",
+    Default  = false,
+    Callback = function(state)
+        _G.autoBuyRunning = state
+        if not state then return end
+
+        task.spawn(function()
+            while _G.autoBuyRunning do
+                scanVehicles()
+                local candidates = {}
+               
+                for label, veh in pairs(VehiclesInstances) do
+                 local sc = veh:GetAttribute("SpawnChance") or math.huge
+                    if sc <= (_G.targetPercentage or 5) then
+                        table.insert(candidates, { label = label, veh = veh })
+                    end
+              end
+
+                if #candidates == 0 then
+                    task.wait(0.15)
+                    continue
+                end
+
+                 local targetLabel, targetVeh = nil, nil
+                for _, c in ipairs(candidates) do
+                    local ok, alive = pcall(function()
+                        return c.veh:IsDescendantOf(VehFolder)
+                    end)
+                     if ok and alive then
+                        targetLabel = c.label
+                        targetVeh   = c.veh
+                         break
+                    end
+                end
+
+                if not targetVeh then
+                    task.wait(0.15)
+                    continue
+              end
+
+                local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
+                local plateOk = pcall(function()
+                    if root and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
+                         root.CFrame = targetVeh.Body.Plate.CFrame
+                    end
+                end)
+                if not plateOk then
+                    task.wait(0.5)
+                    continue
+                end
+                task.wait(0.2)
+
+                local cdOk = pcall(function()
+                     if targetVeh:FindFirstChild("ClickDetector") then
+                        fireclickdetector(targetVeh.ClickDetector)
+                    end
+                end)
+                if not cdOk then
+                    task.wait(0.5)
+                    continue
+                end
+                task.wait(0.25)
+
+                 local playerGui = Player:FindFirstChild("PlayerGui")
+                local confirmBtn
+
+                local uiWait, uiElapsed = false, 0
+                repeat
+                    task.wait(0.1)
+                     uiElapsed = uiElapsed + 0.1
+                    local ok, result = pcall(function()
+                        local btn = playerGui
+                            and playerGui:FindFirstChild("HUD")
+                             and playerGui.HUD:FindFirstChild("Frames")
+                            and playerGui.HUD.Frames:FindFirstChild("Confirmation")
+                            and playerGui.HUD.Frames.Confirmation:FindFirstChild("Confirm")
+                         return btn and btn:IsDescendantOf(playerGui) and btn
+                    end)
+                    if ok and result then
+                        confirmBtn = result
+                         uiWait     = true
+                    end
+                until uiWait or uiElapsed > 2
+
+                if not confirmBtn then
+                    task.wait(0.5)
+                    continue
+                end
+
+                pressEnter(confirmBtn)
+
+                local vehName         = targetVeh.Name
+                 local bought, elapsed = false, 0
+                repeat
+                    task.wait(0.1)
+                    elapsed = elapsed + 0.1
+                     local owned = pcall(function()
+                        return GarageFolder:FindFirstChild(vehName) ~= nil or findPlayerVehicle() ~= nil
+                    end)
+                    if owned then
+                         if GarageFolder:FindFirstChild(vehName) or findPlayerVehicle() then
+                            bought = true
+                            break
+                        end
+                     end
+                until elapsed > 4 or not _G.autoBuyRunning
+
+                if bought then
+                    break
+                  else
+                    task.wait(1)
+                end
+            end
+            _G.autoBuyRunning = false
+        end)
+    end
+})
+
+Automatically:Divider()
+
+Automatically:Toggle({
+    Title    = "Auto Drive Loop (30s)",
+    Icon     = "gauge",
+    Default  = false,
+    Callback = function(state)
+        _G.autoDriveRunning = state
+        if not state then
+            print("[AutoDrive] Loop stopped by user.")
+            return
+        end
+
+        print("[AutoDrive] Loop started.")
+        task.spawn(function()
+            while _G.autoDriveRunning do
+                local char = Player.Character
+                local root = char and char:FindFirstChild("HumanoidRootPart")
+                local hum  = char and char:FindFirstChildWhichIsA("Humanoid")
+                
+                if not root or not hum then 
+                    warn("[AutoDrive] Player character not ready. Waiting 2s...")
+                    task.wait(2)
+                    continue 
+                end
+
+                print("[AutoDrive] Step 1: Teleporting player to start location...")
+                root.CFrame = CFrame.new(
+                    -628.818726, 4.01882744, 646.687927, 
+                    -0.975349545, -4.53806486e-08, 0.220665619, 
+                    -2.15982521e-08, 1, 1.10188459e-07, 
+                    -0.220665619, 1.02706267e-07, -0.975349545
+                )
+                task.wait(0.5)
+
+                print("[AutoDrive] Step 2: Spawning vehicle via tpVeh()...")
+                tpVeh()
+                task.wait(0.7)
+
+                local myCar = findPlayerVehicle()
+                if not myCar then
+                    warn("[AutoDrive] Active vehicle not found in workspace! Retrying...")
+                    task.wait(1)
+                    continue
+                end
+
+                local driveSeat = myCar:FindFirstChild("DriveSeat", true) or myCar:FindFirstChildWhichIsA("VehicleSeat", true)
+                
+                if driveSeat then
+                    print("[AutoDrive] Step 3: Teleporting to DriveSeat and pressing F...")
+                    
+                    hum.WalkToPoint = driveSeat.Position
+                    task.wait(1)
+                    
+                    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.F, false, game)
+                    task.wait(0.1)
+                    VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.F, false, game)
+                    
+                    task.wait(0.5)
+                else
+                    warn("[AutoDrive] Could not find any DriveSeat inside this car!")
+                    task.wait(1)
+                    continue
+                end
+
+                local weightPart = myCar:FindFirstChild("#Weight", true) or myCar:FindFirstChild("Weight", true) or myCar:FindFirstChildWhichIsA("BasePart", true)
+                
+                if not weightPart then
+                    warn("[AutoDrive] Driving part (#Weight) not found! Skipping lap...")
+                    task.wait(1)
+                    continue
+                end
+
+                local bg = Instance.new("BodyGyro")
+                bg.Name = "AutoDriveGyro"
+                bg.MaxTorque = Vector3.new(0, 1000000, 0)
+                bg.P = 30000
+                bg.CFrame = weightPart.CFrame
+                bg.Parent = weightPart
+
+                print("[AutoDrive] Step 4: Driving forward for 30 seconds...")
+                local driveEndTime = os.clock() + 30
+
+                while os.clock() < driveEndTime and _G.autoDriveRunning do
+                    if hum.SeatPart == nil and not driveSeat:FindFirstChild("SeatWeld") then
+                        if not myCar:FindFirstChild("Occupant", true) then
+                            warn("[AutoDrive] Player is no longer inside the vehicle. Aborting lap.")
+                            break
+                        end
+                    end
+                    
+                    local rightSkewDirection = bg.CFrame * CFrame.Angles(0, math.rad(-2), 0)
+                    weightPart.Velocity = rightSkewDirection.LookVector * 150
+                    
+                    task.wait(0.1)
+                end
+
+                if bg then bg:Destroy() end
+
+                if _G.autoDriveRunning then
+                    print("[AutoDrive] Step 5: Lap duration met! Forcing jump output.")
+                    jumpCharacter()
+                    task.wait(1.5)
+                end
+            end
+            print("[AutoDrive] Loop cleanly terminated.")
         end)
     end
 })
@@ -682,7 +952,6 @@ Automatically:Button({
             local safeBase  = charRoot and charRoot.Position or Vector3.new(0, 100, 0)
             local slots     = buildMachineSlots(building)
 
-            print("[Repair] Removing installed components...")
             removeAllPartsRaw(EngineBay)
 
             local queues = { GrindingMachine = {}, PartsWasher = {}, BatteryCharger = {} }
@@ -692,32 +961,29 @@ Automatically:Button({
                     local rType = child:GetAttribute("RepairMachine")
                     if rType and queues[rType] then
                         table.insert(queues[rType], { Name = child.Name })
-                        total = total + 1
+                         total = total + 1
                     end
                 end
             end
-            if total == 0 then warn("[Repair] No repairable parts detected."); return end
+            if total == 0 then return end
 
-            print("[Repair] Processing " .. total .. " component(s)...")
             local assignments     = distributeToSlots(slots, queues)
             local doneCount       = 0
             local totalAssign     = #assignments
             for idx, assign in ipairs(assignments) do
-                if #assign.parts > 0 then
+                 if #assign.parts > 0 then
                     task.spawn(function()
                         runSlot(assign.slot, assign.parts, safeBase, idx)
                         doneCount = doneCount + 1
-                    end)
+                     end)
                 else
                     doneCount = doneCount + 1
                 end
             end
             while doneCount < totalAssign do task.wait(0.5) end
 
-            print("[Repair] Reinstalling components...")
             reinstallAllParts()
             reinstallAllParts()
-            print("[Repair] Restoration complete.")
         end)
     end
 })
@@ -727,21 +993,19 @@ Automatically:Button({
     Icon     = "paintbrush",
     Callback = function()
         task.spawn(function()
-            Player.Character.HumanoidRootPart.CFrame = CFrame.new(
+             Player.Character.HumanoidRootPart.CFrame = CFrame.new(
                 -990.619568, 4.53032351, -387.379364,
                  0.350393713, -8.45001722e-08, -0.936602473,
                 -4.68328265e-09, 1, -9.19719554e-08,
                  0.936602473, 3.66127715e-08, 0.350393713
             )
-            tpVeh()
+             tpVeh()
             task.wait(2)
 
             local model       = Workspace.Map.FirstCity.Buildings["PitStop(Large)"].Model
             local paintPrompt = findNearestPrompt(model)
             if paintPrompt then
                 fireproximityprompt(paintPrompt)
-            else
-                warn("[Paint] No paint ProximityPrompt found near player.")
             end
             task.wait(0.5)
             pressEnter(Player.PlayerGui.HUD.Frames.Paint.Confirm)
@@ -753,7 +1017,7 @@ Automatically:Button({
     Title    = "Sell Vehicle",
     Icon     = "dollar-sign",
     Callback = function()
-        Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1915, 4, -785)
+         Player.Character.HumanoidRootPart.CFrame = CFrame.new(-1915, 4, -785)
         tpVeh()
         task.wait(0.4)
         fireproximityprompt(workspace.Utils.SellCar.Prompt.ProximityPrompt)
@@ -764,12 +1028,13 @@ Automatically:Button({
     end
 })
 
+-- [[ Vehicle Tab ]]
 local VehTab = Window:Tab({ Title = "Vehicle", Icon = "box" })
 
 VehTab:Button({
     Title    = "Deploy Vehicle",
     Icon     = "refresh-cw",
-    Callback = function()
+     Callback = function()
         task.spawn(tpVeh)
     end
 })
@@ -779,11 +1044,10 @@ VehTab:Button({
     Icon     = "map-pin",
     Callback = function()
         local v = findPlayerVehicle()
-        if not v then print("[Vehicle] No active vehicle found."); return end
+        if not v then return end
         local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
         if root and v:FindFirstChild("Body") and v.Body:FindFirstChild("Plate") then
             root.CFrame = v.Body.Plate.CFrame
-            print("[Vehicle] Teleported to: " .. v.Name)
         end
     end
 })
@@ -792,9 +1056,9 @@ VehTab:Button({
     Title    = "Install Components",
     Icon     = "arrow-down-to-line",
     Callback = function()
-        task.spawn(reinstallAllParts)
+         task.spawn(reinstallAllParts)
         task.spawn(reinstallAllParts)
     end
 })
 
-print("[Garage Manager] Loaded successfully.")
+print("[Garage Manager] Version 2.0 Loaded successfully.")
