@@ -365,7 +365,7 @@ function FarmSession:_phase1_acquire()
         local targetLabel, targetVeh = nil, nil
         for label, veh in pairs(instances) do
             local sc = veh:GetAttribute("SpawnChance") or 0
-            if sc <= self.config.maxSpawnChance then
+            if sc >= self.config.maxSpawnChance then
                 targetLabel, targetVeh = label, veh
                 break
             end
@@ -392,7 +392,7 @@ function FarmSession:_phase1_acquire()
         task.wait(0.6)
 
         -- Wait for confirm UI
-        local playerGui = Player:FindFirstChild("PlayerGui")
+        local playerGui  = Player:FindFirstChild("PlayerGui")
         local confirmBtn = nil
         local uiElapsed  = 0
         repeat
@@ -415,7 +415,22 @@ function FarmSession:_phase1_acquire()
             continue
         end
 
-        pressEnter(confirmBtn)
+        -- Press confirm repeatedly until the Confirmation frame disappears
+        local pressElapsed = 0
+        repeat
+            pressEnter(confirmBtn)
+            task.wait(0.3)
+            pressElapsed += 0.3
+
+            local confirmFrame = playerGui
+                and playerGui:FindFirstChild("HUD")
+                and playerGui.HUD:FindFirstChild("Frames")
+                and playerGui.HUD.Frames:FindFirstChild("Confirmation")
+
+            if not confirmFrame or not confirmFrame.Visible then
+                break
+            end
+        until pressElapsed > 6 or not self:_alive()
 
         local bought, elapsed = false, 0
         repeat
@@ -428,7 +443,6 @@ function FarmSession:_phase1_acquire()
 
         if bought then
             print("[FarmSession] Purchased: " .. targetLabel)
-            -- Warp out of garage interior immediately after purchase
             pcall(function()
                 local charRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
                 if charRoot then charRoot.CFrame = REPAIR_BASE_POS end
