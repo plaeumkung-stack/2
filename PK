@@ -348,7 +348,9 @@ function FarmSession:stop()
     self._targetEndTime = 0
 end
 
--- Purchases vehicles until GarageFolder has >= 3 entries.
+-- ============================================================
+--  Phase 1: Acquire vehicles (target: 3)  —  SC comparator fixed
+-- ============================================================
 function FarmSession:_phase1_acquire()
     print("[FarmSession] Phase 1: Acquire vehicles (target: 3)")
 
@@ -365,7 +367,7 @@ function FarmSession:_phase1_acquire()
         local targetLabel, targetVeh = nil, nil
         for label, veh in pairs(instances) do
             local sc = veh:GetAttribute("SpawnChance") or 0
-            if sc >= self.config.maxSpawnChance then
+            if sc <= self.config.maxSpawnChance then
                 targetLabel, targetVeh = label, veh
                 break
             end
@@ -455,10 +457,25 @@ function FarmSession:_phase1_acquire()
     end
 end
 
--- Repairs and paints all vehicles in sessionVehicles list.
+-- ============================================================
+--  Phase 2: Restore & Paint  —  building lookup hardened
+-- ============================================================
 function FarmSession:_phase2_restore(sessionVehicles)
     print("[FarmSession] Phase 2: Restore & Paint " .. #sessionVehicles .. " vehicle(s)")
-    local building = Workspace.Map.FirstCity.Buildings["PitStop(Large)"]
+
+    local buildingsFolder = Workspace.Map.FirstCity.Buildings
+    local building = buildingsFolder:FindFirstChild("PitStop(Large)")
+        or buildingsFolder:FindFirstChild("PitStop (Large)")
+        or buildingsFolder:FindFirstChild("Pitstop(Large)")
+        or buildingsFolder:FindFirstChild("PitStop")
+
+    if not building then
+        warn("[FarmSession] PitStop building not found under Buildings. Available children:")
+        for _, c in pairs(buildingsFolder:GetChildren()) do
+            warn("  - " .. c.Name)
+        end
+        return
+    end
 
     for carIdx, vehName in ipairs(sessionVehicles) do
         if not self:_alive() then break end
