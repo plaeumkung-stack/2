@@ -237,7 +237,7 @@ local function GetPlayerHeadshot(userId)
         return UiState.HeadshotCache[userId]
     end
     local ok, image = pcall(function()
-        return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size100x100) -- ลดขนาด Request Thumbnail ลงเพื่อความเร็ว
+        return Players:GetUserThumbnailAsync(userId, Enum.ThumbnailType.HeadShot, Enum.ThumbnailSize.Size420x420)
     end)
     if ok and type(image) == "string" then
         UiState.HeadshotCache[userId] = image
@@ -399,7 +399,7 @@ local function SendAllItemsComplete()
         end)
         task.wait(RESET_DELAY)
 
-        if totalSent < totalItems and queueIndex <= #itemQueue do
+        if totalSent < totalItems and queueIndex <= #itemQueue then
             pcall(function()
                 MailboxController:_pickRecipient(targetPlayer.UserId, targetPlayer.DisplayName)
             end)
@@ -504,7 +504,63 @@ local function StopAutoClaimLoop()
     AUTO_TRADE = false
 end
 
--- ลบ UI เก่าออกก่อนสร้างใหม่
+local function GetPlayerPlot()
+    local plotId = LocalPlayer:GetAttribute("PlotId")
+    if not plotId then
+        return nil
+    end
+    local gardens = workspace:FindFirstChild("Gardens")
+    if not gardens then
+        return nil
+    end
+    return gardens:FindFirstChild("Plot" .. tostring(plotId))
+end
+
+local function GetPlayerPlants()
+    local plot = GetPlayerPlot()
+    local plants = plot and plot:FindFirstChild("Plants")
+    if not plants then
+        return {}
+    end
+    local list = {}
+    for _, child in ipairs(plants:GetChildren()) do
+        if child:IsA("Model") then
+            table.insert(list, child)
+        end
+    end
+    return list
+end
+
+local function HasSeedTool()
+    local function scan(container)
+        if not container then
+            return false
+        end
+        for _, child in ipairs(container:GetChildren()) do
+            if child:IsA("Tool") and child:GetAttribute("SeedTool") then
+                return true
+            end
+        end
+        return false
+    end
+    return scan(LocalPlayer.Character) or scan(LocalPlayer:FindFirstChildOfClass("Backpack"))
+end
+
+local function HasHarvestedFruitTool()
+    local function scan(container)
+        if not container then
+            return false
+        end
+        for _, child in ipairs(container:GetChildren()) do
+            if child:IsA("Tool") and (child:GetAttribute("Fruit") or child:GetAttribute("FruitName") or child:GetAttribute("HarvestedFruit")) then
+                return true
+            end
+        end
+        return false
+    end
+    return scan(LocalPlayer.Character) or scan(LocalPlayer:FindFirstChildOfClass("Backpack"))
+end
+
 local existingGui = PlayerGui:FindFirstChild("AutoSendSeedUI")
 if existingGui then
     existingGui:Destroy()
@@ -516,11 +572,10 @@ screenGui.ResetOnSpawn = false
 screenGui.ZIndexBehavior = Enum.ZIndexBehavior.Sibling
 screenGui.Parent = PlayerGui
 
--- ปรับขนาดหน้าต่างหลักเล็กลง (เหลือ 500 x 320)
 local mainFrame = Instance.new("Frame")
 mainFrame.Name = "Main"
-mainFrame.Size = UDim2.new(0, 500, 0, 320)
-mainFrame.Position = UDim2.new(0.5, -250, 0.5, -160)
+mainFrame.Size = UDim2.new(0, 700, 0, 430)
+mainFrame.Position = UDim2.new(0.5, -350, 0.5, -215)
 mainFrame.BackgroundColor3 = Color3.fromRGB(28, 20, 45)
 mainFrame.BorderSizePixel = 0
 mainFrame.ClipsDescendants = true
@@ -528,60 +583,128 @@ mainFrame.Parent = screenGui
 
 local mainStroke = Instance.new("UIStroke")
 mainStroke.Color = Color3.fromRGB(15, 8, 25)
-mainStroke.Thickness = 2
+mainStroke.Thickness = 3
 mainStroke.Parent = mainFrame
+
+local outerShadow = Instance.new("Frame")
+outerShadow.Size = UDim2.new(1, -6, 1, -6)
+outerShadow.Position = UDim2.new(0, 3, 0, 3)
+outerShadow.BackgroundColor3 = Color3.fromRGB(50, 35, 80)
+outerShadow.BackgroundTransparency = 0.65
+outerShadow.BorderSizePixel = 0
+outerShadow.ZIndex = 0
+outerShadow.Parent = mainFrame
 
 local topBar = Instance.new("Frame")
 topBar.Name = "Header"
-topBar.Size = UDim2.new(1, 0, 0, 38) -- ลดความสูงลงเหลือ 38
+topBar.Size = UDim2.new(1, 0, 0, 58)
 topBar.BackgroundColor3 = Color3.fromRGB(88, 44, 180)
 topBar.BorderSizePixel = 0
+topBar.ClipsDescendants = true
 topBar.ZIndex = 2
 topBar.Parent = mainFrame
 
+local topStroke = Instance.new("UIStroke")
+topStroke.Color = Color3.fromRGB(55, 25, 110)
+topStroke.Thickness = 2
+topStroke.Parent = topBar
+
 local title = Instance.new("TextLabel")
-title.Size = UDim2.new(0, 200, 1, 0)
-title.Position = UDim2.new(0, 12, 0, 0)
+title.Size = UDim2.new(0, 300, 1, 0)
+title.Position = UDim2.new(0, 16, 0, 0)
 title.BackgroundTransparency = 1
 title.Text = "Your Mailbox"
 title.TextColor3 = Color3.fromRGB(255, 255, 255)
 title.Font = Enum.Font.FredokaOne
-title.TextSize = 18 -- ปรับฟอนต์เล็กลง
+title.TextSize = 26
 title.TextXAlignment = Enum.TextXAlignment.Left
 title.ZIndex = 3
 title.Parent = topBar
 
+local function CreateHeaderButton(text, bgColor, posScaleX, widthScale, isClose)
+    local button = Instance.new("TextButton")
+    button.AnchorPoint = Vector2.new(0.5, 0.5)
+    button.Size = isClose and UDim2.new(0, 32, 0, 32) or UDim2.new(widthScale, 0, 0, 32)
+    button.Position = UDim2.new(posScaleX, 0, 0.5, 0)
+    button.BackgroundColor3 = bgColor
+    button.BorderSizePixel = 0
+    button.Text = text
+    button.TextColor3 = Color3.fromRGB(255, 255, 255)
+    button.Font = Enum.Font.FredokaOne
+    button.TextSize = isClose and 20 or 17
+    button.ClipsDescendants = true
+    button.ZIndex = 3
+    button.Parent = topBar
+
+    local stroke = Instance.new("UIStroke")
+    stroke.Color = Color3.fromRGB(100, 80, 150)
+    stroke.Thickness = 2
+    stroke.Parent = button
+
+    return button
+end
+
+local sendTabButton = CreateHeaderButton("Mail", Color3.fromRGB(60, 45, 95), 0.69, 0.17, false)
+local receiveTabButton = CreateHeaderButton("Receive", Color3.fromRGB(60, 45, 95), 0.87, 0.17, false)
+local closeButton = CreateHeaderButton("X", Color3.fromRGB(255, 100, 120), 0.95, 0, true)
+sendTabButton.Visible = false
+receiveTabButton.Visible = false
+closeButton.Visible = false
+
 local body = Instance.new("Frame")
-body.Size = UDim2.new(1, -16, 1, -48)
-body.Position = UDim2.new(0, 8, 0, 44)
+body.Size = UDim2.new(1, -20, 1, -70)
+body.Position = UDim2.new(0, 10, 0, 60)
 body.BackgroundTransparency = 1
 body.ClipsDescendants = true
 body.ZIndex = 1
 body.Parent = mainFrame
 
--- แยกสัดส่วนซ้าย-ขวาให้สมดุลกับขนาด 500px
 local selectPlayerFrame = Instance.new("Frame")
 selectPlayerFrame.Name = "SelectPlayerFrame"
-selectPlayerFrame.Size = UDim2.new(0, 210, 1, 0)
+selectPlayerFrame.Size = UDim2.new(0, 286, 1, 0)
 selectPlayerFrame.BackgroundTransparency = 1
+selectPlayerFrame.ClipsDescendants = true
 selectPlayerFrame.Parent = body
 
 local itemSendFrame = Instance.new("Frame")
 itemSendFrame.Name = "ItemSendFrame"
-itemSendFrame.Size = UDim2.new(1, -220, 1, 0)
-itemSendFrame.Position = UDim2.new(0, 220, 0, 0)
+itemSendFrame.Size = UDim2.new(1, -298, 1, 0)
+itemSendFrame.Position = UDim2.new(0, 298, 0, 0)
 itemSendFrame.BackgroundTransparency = 1
+itemSendFrame.ClipsDescendants = true
+itemSendFrame.Visible = true
 itemSendFrame.Parent = body
+
+local receiveFrame = Instance.new("ScrollingFrame")
+receiveFrame.Name = "ReceiveFrame"
+receiveFrame.Size = UDim2.new(1, 0, 1, 0)
+receiveFrame.BackgroundTransparency = 1
+receiveFrame.BorderSizePixel = 0
+receiveFrame.ScrollBarThickness = 6
+receiveFrame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+receiveFrame.Visible = false
+receiveFrame.Parent = body
+
+local receiveLayout = Instance.new("UIListLayout")
+receiveLayout.Padding = UDim.new(0, 10)
+receiveLayout.Parent = receiveFrame
+
+local receivePadding = Instance.new("UIPadding")
+receivePadding.PaddingTop = UDim.new(0, 4)
+receivePadding.PaddingLeft = UDim.new(0, 4)
+receivePadding.PaddingRight = UDim.new(0, 4)
+receivePadding.PaddingBottom = UDim.new(0, 4)
+receivePadding.Parent = receiveFrame
 
 local function CreateLabel(parent, text, y)
     local label = Instance.new("TextLabel")
-    label.Size = UDim2.new(1, -10, 0, 14)
-    label.Position = UDim2.new(0, 5, 0, y)
+    label.Size = UDim2.new(1, -20, 0, 20)
+    label.Position = UDim2.new(0, 10, 0, y)
     label.BackgroundTransparency = 1
     label.Text = text
     label.TextColor3 = Color3.fromRGB(235, 240, 255)
     label.Font = Enum.Font.GothamBold
-    label.TextSize = 10 -- ฟอนต์หัวข้อเล็กลง
+    label.TextSize = 13
     label.TextXAlignment = Enum.TextXAlignment.Left
     label.ZIndex = 2
     label.Parent = parent
@@ -590,8 +713,8 @@ end
 
 local function CreateBox(parent, placeholder, text, y)
     local box = Instance.new("TextBox")
-    box.Size = UDim2.new(1, -10, 0, 24) -- ความสูงกล่องข้อความลดลง
-    box.Position = UDim2.new(0, 5, 0, y)
+    box.Size = UDim2.new(1, -20, 0, 34)
+    box.Position = UDim2.new(0, 10, 0, y)
     box.BackgroundColor3 = Color3.fromRGB(45, 32, 75)
     box.BorderSizePixel = 0
     box.PlaceholderText = placeholder
@@ -599,14 +722,14 @@ local function CreateBox(parent, placeholder, text, y)
     box.TextColor3 = Color3.fromRGB(240, 245, 255)
     box.PlaceholderColor3 = Color3.fromRGB(160, 150, 190)
     box.Font = Enum.Font.Gotham
-    box.TextSize = 11
+    box.TextSize = 13
     box.ClearTextOnFocus = false
     box.ZIndex = 2
     box.Parent = parent
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.fromRGB(100, 80, 150)
-    stroke.Thickness = 1.5
+    stroke.Thickness = 2
     stroke.Parent = box
 
     return box
@@ -614,109 +737,132 @@ end
 
 local function CreateActionButton(parent, text, color, y, sizeX, posX)
     local button = Instance.new("TextButton")
-    button.Size = UDim2.new(sizeX or 1, sizeX and -5 or -10, 0, 26) -- ปุ่มกระชับขึ้น
-    button.Position = UDim2.new(posX or 0, posX and 5 or 5, 0, y)
+    button.Size = UDim2.new(sizeX or 1, sizeX and -5 or -20, 0, 34)
+    button.Position = UDim2.new(posX or 0, posX and 10 or 10, 0, y)
     button.BackgroundColor3 = color
     button.BorderSizePixel = 0
     button.Text = text
     button.TextColor3 = Color3.fromRGB(255, 255, 255)
     button.Font = Enum.Font.GothamBold
-    button.TextSize = 11
+    button.TextSize = 13
     button.AutoButtonColor = true
+    button.ClipsDescendants = true
     button.ZIndex = 2
     button.Parent = parent
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
+    corner.CornerRadius = UDim.new(0, 10)
     corner.Parent = button
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.fromRGB(100, 80, 150)
-    stroke.Thickness = 1.5
+    stroke.Thickness = 2
     stroke.Parent = button
+
+    local shine = Instance.new("Frame")
+    shine.Name = "Shine"
+    shine.Size = UDim2.new(1, -6, 0, 9)
+    shine.Position = UDim2.new(0, 3, 0, 3)
+    shine.BackgroundColor3 = Color3.fromRGB(200, 180, 255)
+    shine.BackgroundTransparency = 0.82
+    shine.BorderSizePixel = 0
+    shine.ZIndex = 3
+    shine.Parent = button
+
+    local shineCorner = Instance.new("UICorner")
+    shineCorner.CornerRadius = UDim.new(0, 8)
+    shineCorner.Parent = shine
 
     return button
 end
 
 local function CreateScroll(parent, y, height)
     local frame = Instance.new("ScrollingFrame")
-    frame.Size = UDim2.new(1, -10, 0, height)
-    frame.Position = UDim2.new(0, 5, 0, y)
+    frame.Size = UDim2.new(1, -20, 0, height)
+    frame.Position = UDim2.new(0, 10, 0, y)
     frame.BackgroundColor3 = Color3.fromRGB(50, 35, 85)
     frame.BorderSizePixel = 0
     frame.CanvasSize = UDim2.new()
-    frame.ScrollBarThickness = 4
+    frame.ScrollBarThickness = 5
     frame.AutomaticCanvasSize = Enum.AutomaticSize.Y
+    frame.ClipsDescendants = true
     frame.ZIndex = 2
     frame.Parent = parent
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 6)
+    corner.CornerRadius = UDim.new(0, 10)
     corner.Parent = frame
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.fromRGB(88, 70, 140)
-    stroke.Thickness = 1.5
+    stroke.Thickness = 2
     stroke.Parent = frame
 
     local layout = Instance.new("UIListLayout")
-    layout.Padding = UDim.new(0, 4)
+    layout.Padding = UDim.new(0, 6)
     layout.Parent = frame
 
     local padding = Instance.new("UIPadding")
-    padding.PaddingTop = UDim.new(0, 4)
-    padding.PaddingBottom = UDim.new(0, 4)
-    padding.PaddingLeft = UDim.new(0, 4)
-    padding.PaddingRight = UDim.new(0, 4)
+    padding.PaddingTop = UDim.new(0, 8)
+    padding.PaddingBottom = UDim.new(0, 8)
+    padding.PaddingLeft = UDim.new(0, 8)
+    padding.PaddingRight = UDim.new(0, 8)
     padding.Parent = frame
 
     return frame
 end
 
--- ช่องค้นหาผู้เล่นด้านบน
 local topSearchBar = Instance.new("Frame")
-topSearchBar.Size = UDim2.new(1, -10, 0, 32)
-topSearchBar.Position = UDim2.new(0, 5, 0, 0)
+topSearchBar.Size = UDim2.new(1, -20, 0, 46)
+topSearchBar.Position = UDim2.new(0, 10, 0, 2)
 topSearchBar.BackgroundColor3 = Color3.fromRGB(35, 25, 60)
 topSearchBar.BorderSizePixel = 0
+topSearchBar.ClipsDescendants = true
 topSearchBar.ZIndex = 2
 topSearchBar.Parent = selectPlayerFrame
 
 local topSearchStroke = Instance.new("UIStroke")
 topSearchStroke.Color = Color3.fromRGB(100, 80, 150)
-topSearchStroke.Thickness = 1.5
+topSearchStroke.Thickness = 2
 topSearchStroke.Parent = topSearchBar
 
-local targetBox = CreateBox(topSearchBar, "Search player name...", TARGET_PLAYER, 4)
-targetBox.Size = UDim2.new(1, -8, 0, 24)
-targetBox.Position = UDim2.new(0, 4, 0, 0)
+local searchIcon = Instance.new("TextLabel")
+searchIcon.Size = UDim2.new(0, 34, 1, 0)
+searchIcon.Position = UDim2.new(0, 4, 0, 0)
+searchIcon.BackgroundTransparency = 1
+searchIcon.Text = "Q"
+searchIcon.TextColor3 = Color3.fromRGB(255, 255, 255)
+searchIcon.Font = Enum.Font.FredokaOne
+searchIcon.TextSize = 20
+searchIcon.ZIndex = 3
+searchIcon.Parent = topSearchBar
 
--- ลิสต์ผู้เล่นและไอเทม (ปรับความสูงให้พอดีกับหน้าต่าง 320px)
-local playerScroll = CreateScroll(selectPlayerFrame, 38, 175)
-local refreshPlayersButton = CreateActionButton(selectPlayerFrame, "Refresh Players", Color3.fromRGB(55, 40, 90), 218)
+local targetBox = CreateBox(topSearchBar, "Player name or display name", TARGET_PLAYER, 10)
+targetBox.Size = UDim2.new(1, -44, 0, 30)
+targetBox.Position = UDim2.new(0, 36, 0, 8)
+
+local playerScroll = CreateScroll(selectPlayerFrame, 56, 248)
+local refreshPlayersButton = CreateActionButton(selectPlayerFrame, "Refresh Players", Color3.fromRGB(55, 40, 90), 314)
 
 CreateLabel(itemSendFrame, "Your Inventory", 0)
-local autoTradeButton = CreateActionButton(itemSendFrame, AUTO_TRADE and "Auto Claim ON" or "Auto Claim OFF", AUTO_TRADE and Color3.fromRGB(120, 80, 200) or Color3.fromRGB(55, 40, 90), 16)
-local itemScroll = CreateScroll(itemSendFrame, 46, 68)
+local autoTradeButton = CreateActionButton(itemSendFrame, AUTO_TRADE and "Auto Accept Trade ON" or "Auto Accept Trade OFF", AUTO_TRADE and Color3.fromRGB(120, 80, 200) or Color3.fromRGB(55, 40, 90), 22)
+local itemScroll = CreateScroll(itemSendFrame, 64, 112)
+CreateLabel(itemSendFrame, "Sending Settings", 186)
+CreateLabel(itemSendFrame, "Mail Note", 208)
+local noteBox = CreateBox(itemSendFrame, "Mail note", NOTE_MESSAGE, 230)
+CreateLabel(itemSendFrame, "Auto Delay (seconds)", 272)
+local delayBox = CreateBox(itemSendFrame, "5", tostring(SEND_DELAY), 294)
+local refreshItemsButton = CreateActionButton(itemSendFrame, "Refresh Items", Color3.fromRGB(55, 40, 90), 326, 0.48, 0)
+local autoToggleButton = CreateActionButton(itemSendFrame, AUTO_SEND and "Auto Send ON" or "Auto Send OFF", AUTO_SEND and Color3.fromRGB(120, 80, 200) or Color3.fromRGB(55, 40, 90), 326, 0.48, 0.52)
 
-CreateLabel(itemSendFrame, "Mail Note", 118)
-local noteBox = CreateBox(itemSendFrame, "Mail note", NOTE_MESSAGE, 134)
-
-CreateLabel(itemSendFrame, "Auto Delay (seconds)", 162)
-local delayBox = CreateBox(itemSendFrame, "5", tostring(SEND_DELAY), 178)
-
-local refreshItemsButton = CreateActionButton(itemSendFrame, "Refresh Items", Color3.fromRGB(55, 40, 90), 218, 0.48, 0)
-local autoToggleButton = CreateActionButton(itemSendFrame, AUTO_SEND and "Auto Send ON" or "Auto Send OFF", AUTO_SEND and Color3.fromRGB(120, 80, 200) or Color3.fromRGB(55, 40, 90), 218, 0.48, 0.52)
-
--- สถานะด้านล่างสุด
 local statusLabel = Instance.new("TextLabel")
-statusLabel.Size = UDim2.new(1, -10, 0, 14)
-statusLabel.Position = UDim2.new(0, 5, 1, -18)
+statusLabel.Size = UDim2.new(1, -20, 0, 16)
+statusLabel.Position = UDim2.new(0, 10, 1, -26)
 statusLabel.BackgroundTransparency = 1
 statusLabel.Text = "Ready"
 statusLabel.TextColor3 = Color3.fromRGB(220, 225, 245)
 statusLabel.Font = Enum.Font.Gotham
-statusLabel.TextSize = 10
+statusLabel.TextSize = 11
 statusLabel.TextXAlignment = Enum.TextXAlignment.Left
 statusLabel.ZIndex = 2
 statusLabel.Parent = selectPlayerFrame
@@ -728,29 +874,29 @@ end
 
 local function CreateListButton(parent, text, image)
     local button = Instance.new("TextButton")
-    local hasImage = image and image ~= ""
-    button.Size = UDim2.new(1, 0, 0, hasImage and 34 or 24) -- ปุ่มไอเทมเล็กลง
+    button.Size = UDim2.new(1, 0, 0, image and image ~= "" and 48 or 28)
     button.BackgroundColor3 = Color3.fromRGB(40, 28, 70)
     button.BorderSizePixel = 0
     button.Text = ""
     button.AutoButtonColor = true
+    button.ClipsDescendants = true
     button.ZIndex = 2
     button.Parent = parent
 
     local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 4)
+    corner.CornerRadius = UDim.new(0, 8)
     corner.Parent = button
 
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.fromRGB(100, 80, 150)
-    stroke.Thickness = 1
+    stroke.Thickness = 2
     stroke.Parent = button
 
-    if hasImage then
+    if image and image ~= "" then
         local itemImage = Instance.new("ImageLabel")
         itemImage.Name = "ItemImage"
-        itemImage.Size = UDim2.new(0, 26, 0, 26)
-        itemImage.Position = UDim2.new(0, 4, 0.5, -13)
+        itemImage.Size = UDim2.new(0, 36, 0, 36)
+        itemImage.Position = UDim2.new(0, 6, 0.5, -18)
         itemImage.BackgroundTransparency = 1
         itemImage.Image = image
         itemImage.ScaleType = Enum.ScaleType.Fit
@@ -759,13 +905,13 @@ local function CreateListButton(parent, text, image)
 
         local itemText = Instance.new("TextLabel")
         itemText.Name = "ItemText"
-        itemText.Size = UDim2.new(1, -36, 1, 0)
-        itemText.Position = UDim2.new(0, 32, 0, 0)
+        itemText.Size = UDim2.new(1, -48, 1, 0)
+        itemText.Position = UDim2.new(0, 44, 0, 0)
         itemText.BackgroundTransparency = 1
         itemText.Text = text
         itemText.TextColor3 = Color3.fromRGB(240, 245, 255)
         itemText.Font = Enum.Font.GothamBold
-        itemText.TextSize = 11
+        itemText.TextSize = 12
         itemText.TextXAlignment = Enum.TextXAlignment.Left
         itemText.ZIndex = 3
         itemText.Parent = button
@@ -773,7 +919,7 @@ local function CreateListButton(parent, text, image)
         button.Text = text
         button.TextColor3 = Color3.fromRGB(240, 245, 255)
         button.Font = Enum.Font.Gotham
-        button.TextSize = 11
+        button.TextSize = 12
     end
 
     return button
@@ -781,61 +927,65 @@ end
 
 local function CreatePlayerButton(parent, player)
     local button = Instance.new("TextButton")
-    button.Size = UDim2.new(1, 0, 0, 44) -- ลดความสูงปุ่มผู้เล่นลงจาก 70 เหลือ 44
+    button.Size = UDim2.new(1, 0, 0, 70)
     button.BackgroundColor3 = Color3.fromRGB(40, 28, 70)
     button.BorderSizePixel = 0
     button.Text = ""
     button.AutoButtonColor = true
+    button.ClipsDescendants = true
     button.ZIndex = 2
     button.Parent = parent
 
-    local corner = Instance.new("UICorner")
-    corner.CornerRadius = UDim.new(0, 4)
-    corner.Parent = button
-
     local stroke = Instance.new("UIStroke")
     stroke.Color = Color3.fromRGB(100, 80, 150)
-    stroke.Thickness = 1.5
+    stroke.Thickness = 2
     stroke.Parent = button
 
     local avatarFrame = Instance.new("Frame")
-    avatarFrame.Size = UDim2.new(0, 32, 0, 32)
-    avatarFrame.Position = UDim2.new(0, 6, 0.5, -16)
+    avatarFrame.Size = UDim2.new(0, 54, 0, 54)
+    avatarFrame.Position = UDim2.new(0, 8, 0.5, -27)
     avatarFrame.BackgroundColor3 = Color3.fromRGB(50, 35, 75)
     avatarFrame.BorderSizePixel = 0
     avatarFrame.ZIndex = 3
     avatarFrame.Parent = button
 
+    local avatarStroke = Instance.new("UIStroke")
+    avatarStroke.Color = Color3.fromRGB(88, 70, 140)
+    avatarStroke.Thickness = 2
+    avatarStroke.Parent = avatarFrame
+
     local avatarImage = Instance.new("ImageLabel")
     avatarImage.Name = "PlayerImage"
-    avatarImage.Size = UDim2.new(1, 0, 1, 0)
+    avatarImage.Size = UDim2.new(1, -6, 1, -6)
+    avatarImage.Position = UDim2.new(0, 3, 0, 3)
     avatarImage.BackgroundTransparency = 1
+    avatarImage.Image = ""
     avatarImage.ScaleType = Enum.ScaleType.Crop
     avatarImage.ZIndex = 4
     avatarImage.Parent = avatarFrame
 
     local nameLabel = Instance.new("TextLabel")
     nameLabel.Name = "PlayerName"
-    nameLabel.Size = UDim2.new(1, -48, 0, 16)
-    nameLabel.Position = UDim2.new(0, 44, 0, 6)
+    nameLabel.Size = UDim2.new(1, -76, 0, 26)
+    nameLabel.Position = UDim2.new(0, 70, 0, 8)
     nameLabel.BackgroundTransparency = 1
     nameLabel.Text = player.Name
     nameLabel.TextColor3 = Color3.fromRGB(245, 248, 255)
     nameLabel.Font = Enum.Font.FredokaOne
-    nameLabel.TextSize = 12 -- ฟอนต์เล็กลงตามขนาดปุ่ม
+    nameLabel.TextSize = 17
     nameLabel.TextXAlignment = Enum.TextXAlignment.Left
     nameLabel.ZIndex = 4
     nameLabel.Parent = button
 
     local handleLabel = Instance.new("TextLabel")
     handleLabel.Name = "PlayerHandle"
-    handleLabel.Size = UDim2.new(1, -48, 0, 12)
-    handleLabel.Position = UDim2.new(0, 44, 0, 22)
+    handleLabel.Size = UDim2.new(1, -76, 0, 18)
+    handleLabel.Position = UDim2.new(0, 70, 0, 34)
     handleLabel.BackgroundTransparency = 1
     handleLabel.Text = "@" .. player.DisplayName
     handleLabel.TextColor3 = Color3.fromRGB(190, 185, 215)
     handleLabel.Font = Enum.Font.GothamBold
-    handleLabel.TextSize = 9
+    handleLabel.TextSize = 11
     handleLabel.TextXAlignment = Enum.TextXAlignment.Left
     handleLabel.ZIndex = 4
     handleLabel.Parent = button
@@ -851,8 +1001,16 @@ local function UpdateAutoToggle()
 end
 
 local function UpdateAutoTradeToggle()
-    autoTradeButton.Text = AUTO_TRADE and "Auto Claim ON" or "Auto Claim OFF"
+    autoTradeButton.Text = AUTO_TRADE and "Auto Accept Trade ON" or "Auto Accept Trade OFF"
     autoTradeButton.BackgroundColor3 = AUTO_TRADE and Color3.fromRGB(120, 80, 200) or Color3.fromRGB(55, 40, 90)
+end
+
+local function SetPage(isSendPage)
+    itemSendFrame.Visible = isSendPage
+    selectPlayerFrame.Visible = isSendPage
+    receiveFrame.Visible = not isSendPage
+    sendTabButton.BackgroundColor3 = isSendPage and Color3.fromRGB(120, 80, 200) or Color3.fromRGB(60, 45, 95)
+    receiveTabButton.BackgroundColor3 = not isSendPage and Color3.fromRGB(120, 80, 200) or Color3.fromRGB(60, 45, 95)
 end
 
 local function UpdateItemButtons()
@@ -889,7 +1047,7 @@ local function RefreshItemList()
                 ITEM_FILTER = GetSelectedItemList()
             end
             UpdateItemButtons()
-            SetStatus("Selected: " .. table.concat(ITEM_FILTER, ", "))
+            SetStatus("Selected items: " .. table.concat(ITEM_FILTER, ", "))
         end)
     end
 
@@ -933,7 +1091,7 @@ local function RefreshPlayerList()
                 TARGET_PLAYER = player.Name
                 targetBox.Text = TARGET_PLAYER
                 HighlightPlayerButtons()
-                SetStatus("Target: " .. TARGET_PLAYER, Color3.fromRGB(194, 255, 163))
+                SetStatus("Target set to " .. TARGET_PLAYER, Color3.fromRGB(194, 255, 163))
             end)
         end
     end
@@ -962,12 +1120,12 @@ end)
 
 refreshPlayersButton.MouseButton1Click:Connect(function()
     RefreshPlayerList()
-    SetStatus("Refreshed Players", Color3.fromRGB(194, 255, 163))
+    SetStatus("Player list refreshed", Color3.fromRGB(194, 255, 163))
 end)
 
 refreshItemsButton.MouseButton1Click:Connect(function()
     RefreshItemList()
-    SetStatus("Refreshed Items", Color3.fromRGB(194, 255, 163))
+    SetStatus("Item list refreshed", Color3.fromRGB(194, 255, 163))
 end)
 
 autoTradeButton.MouseButton1Click:Connect(function()
@@ -975,10 +1133,10 @@ autoTradeButton.MouseButton1Click:Connect(function()
     UpdateAutoTradeToggle()
     if AUTO_TRADE then
         StartAutoClaimLoop()
-        SetStatus("Auto Claim Enabled", Color3.fromRGB(126, 221, 154))
+        SetStatus("Auto claim mailbox enabled", Color3.fromRGB(126, 221, 154))
     else
         StopAutoClaimLoop()
-        SetStatus("Auto Claim Disabled", Color3.fromRGB(255, 140, 140))
+        SetStatus("Auto claim mailbox disabled", Color3.fromRGB(255, 140, 140))
     end
 end)
 
@@ -987,16 +1145,29 @@ autoToggleButton.MouseButton1Click:Connect(function()
     UpdateAutoToggle()
     if AUTO_SEND then
         StartAutoSendLoop()
-        SetStatus("Auto Send Enabled", Color3.fromRGB(126, 221, 154))
+        SetStatus("Auto send enabled", Color3.fromRGB(126, 221, 154))
     else
         StopAutoSendLoop()
-        SetStatus("Auto Send Disabled", Color3.fromRGB(255, 140, 140))
+        SetStatus("Auto send disabled", Color3.fromRGB(255, 140, 140))
     end
 end)
 
--- ระบบลากหน้าต่าง (Drag UI)
+sendTabButton.MouseButton1Click:Connect(function()
+    SetPage(true)
+end)
+
+receiveTabButton.MouseButton1Click:Connect(function()
+    SetPage(false)
+end)
+
+closeButton.MouseButton1Click:Connect(function()
+    screenGui.Enabled = false
+end)
+
 local dragging = false
-local dragInput, dragStart, startPos
+local dragInput
+local dragStart
+local startPos
 
 topBar.InputBegan:Connect(function(input)
     if input.UserInputType == Enum.UserInputType.MouseButton1 or input.UserInputType == Enum.UserInputType.Touch then
@@ -1029,29 +1200,37 @@ UserInputService.InputChanged:Connect(function(input)
     end
 end)
 
--- โหลดข้อมูลเริ่มต้น
 screenGui.Enabled = true
 RefreshPlayerList()
 RefreshItemList()
 UpdateAutoToggle()
 UpdateAutoTradeToggle()
-SetStatus("UI Small Loaded", Color3.fromRGB(126, 221, 154))
+SetPage(true)
+SetStatus("UI ready", Color3.fromRGB(126, 221, 154))
 
 Players.PlayerAdded:Connect(function()
-    if screenGui.Parent then RefreshPlayerList() end
+    if screenGui.Parent then
+        RefreshPlayerList()
+    end
 end)
 
 Players.PlayerRemoving:Connect(function()
-    if screenGui.Parent then RefreshPlayerList() end
+    if screenGui.Parent then
+        RefreshPlayerList()
+    end
 end)
 
 local Backpack = LocalPlayer:FindFirstChild("Backpack")
 if Backpack then
     Backpack.ChildAdded:Connect(function()
-        if screenGui.Parent then RefreshItemList() end
+        if screenGui.Parent then
+            RefreshItemList()
+        end
     end)
     Backpack.ChildRemoved:Connect(function()
-        if screenGui.Parent then RefreshItemList() end
+        if screenGui.Parent then
+            RefreshItemList()
+        end
     end)
 end
 
@@ -1061,5 +1240,10 @@ local fade = TweenService:Create(mainFrame, TweenInfo.new(0.2, Enum.EasingStyle.
 mainFrame.BackgroundTransparency = 1
 fade:Play()
 
-if AUTO_SEND then StartAutoSendLoop() end
-if AUTO_TRADE then StartAutoClaimLoop() end
+print("[Auto Send] UI loaded")
+if AUTO_SEND then
+    StartAutoSendLoop()
+end
+if AUTO_TRADE then
+    StartAutoClaimLoop()
+end
