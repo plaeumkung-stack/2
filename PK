@@ -30,10 +30,10 @@ local WindUI = loadstring(game:HttpGet("https://github.com/Footagesus/WindUI/rel
 
 local function notify(content, icon, duration)
     WindUI:Notify({
-        Title = "Garage Manager",
-        Content = content,
+        Title    = "Garage Manager",
+        Content  = content,
         Duration = duration or 3,
-        Icon = icon or "info",
+        Icon     = icon or "info",
     })
 end
 
@@ -48,7 +48,7 @@ end
 
 local function pressEnter(btn)
     Gui.SelectedCoreObject = btn
-    VirtualInputManager:SendKeyEvent(true, Enum.KeyCode.Return, false, game)
+    VirtualInputManager:SendKeyEvent(true,  Enum.KeyCode.Return, false, game)
     task.wait(0.5)
     VirtualInputManager:SendKeyEvent(false, Enum.KeyCode.Return, false, game)
     task.wait(0.1)
@@ -57,8 +57,7 @@ end
 
 local function waitForPartModel(partName, timeout)
     local elapsed = 0
-    local POLL = 0.3
-
+    local POLL    = 0.3
     while elapsed < timeout do
         for _, child in pairs(MoveableParts:GetChildren()) do
             if child.Name == partName and child:GetAttribute("Owner") == Player.Name then
@@ -68,19 +67,16 @@ local function waitForPartModel(partName, timeout)
         task.wait(POLL)
         elapsed = elapsed + POLL
     end
-
     warn(string.format("[waitForPartModel] Timed out on '%s' (%ds)", partName, timeout))
     return nil
 end
 
 local function findNearestPrompt(modelFolder)
     local character = Player.Character
-    local root = character and character:FindFirstChild("HumanoidRootPart")
-    if not root then
-        return nil
-    end
+    local root      = character and character:FindFirstChild("HumanoidRootPart")
+    if not root then return nil end
 
-    local nearest = nil
+    local nearest     = nil
     local nearestDist = math.huge
 
     for _, child in pairs(modelFolder:GetChildren()) do
@@ -88,23 +84,16 @@ local function findNearestPrompt(modelFolder)
         if promptPart then
             local pp = promptPart:FindFirstChildWhichIsA("ProximityPrompt")
             if pp then
-                local ok, pos = pcall(function()
-                    return child:GetPivot().Position
-                end)
-
+                local ok, pos = pcall(function() return child:GetPivot().Position end)
                 if not ok then
                     local bp = child:FindFirstChildWhichIsA("BasePart")
-                    if bp then
-                        ok = true
-                        pos = bp.Position
-                    end
+                    if bp then ok = true; pos = bp.Position end
                 end
-
                 if ok then
                     local dist = (pos - root.Position).Magnitude
                     if dist < nearestDist then
                         nearestDist = dist
-                        nearest = pp
+                        nearest     = pp
                     end
                 end
             end
@@ -115,10 +104,7 @@ end
 
 local function storeVehicle(vehName)
     local data = GarageFolder:FindFirstChild(vehName)
-    if not data then
-        return
-    end
-
+    if not data then return end
     pcall(function()
         ReplicatedStorage.Events.Vehicles.RemoteStore:InvokeServer(data)
     end)
@@ -131,7 +117,6 @@ local function spawnVehicle(vehName, spawnCFrame)
         warn("[spawnVehicle] No garage data for: " .. vehName)
         return false
     end
-
     local ok = pcall(function()
         ReplicatedStorage.Events.Vehicles.RemoteLoad:InvokeServer(data, spawnCFrame)
     end)
@@ -142,10 +127,25 @@ end
 local function killPlayer()
     local char = Player.Character
     local hum  = char and char:FindFirstChildOfClass("Humanoid")
-    if hum then
-        hum.Health = 0
+    if hum then hum.Health = 0 end
+end
+
+-- เธญเธญเธเธเธฒเธ garage เธ–เนเธฒเธเธนเนเน€เธฅเนเธเธ•เธดเธ”เธญเธขเธนเนเธเนเธฒเธเนเธ
+local function leaveGarageIfInside()
+    if #GarageFolder:GetChildren() > 0 then
+        local leavePrompt = workspace.Garages.Default.Leave.Attachment:FindFirstChild("LeavePrompt")
+        if leavePrompt then
+            pcall(function()
+                fireproximityprompt(leavePrompt)
+            end)
+            task.wait(1.5)
+        end
     end
 end
+
+-- =========================================================================
+-- VehicleScanner
+-- =========================================================================
 
 local VehicleScanner = {}
 VehicleScanner.__index = VehicleScanner
@@ -158,7 +158,7 @@ function VehicleScanner.scan()
         if veh:GetAttribute("Junkyard") and not veh:GetAttribute("ExclusivePrice") then
             local modelName = veh:GetAttribute("Model")
             if modelName then
-                local sc = veh:GetAttribute("SpawnChance") or "?"
+                local sc       = veh:GetAttribute("SpawnChance") or "?"
                 local priceRaw = veh:GetAttribute("Price")
                 local priceStr = ""
 
@@ -177,6 +177,10 @@ function VehicleScanner.scan()
     return labels, instances
 end
 
+-- =========================================================================
+-- RepairManager
+-- =========================================================================
+
 local RepairManager = {}
 RepairManager.__index = RepairManager
 
@@ -187,18 +191,14 @@ end
 function RepairManager:_buildMachineSlots(building)
     local slots = {
         GrindingMachine = {},
-        PartsWasher = {},
-        BatteryCharger = {}
+        PartsWasher     = {},
+        BatteryCharger  = {}
     }
-
     for _, station in pairs(building:GetChildren()) do
         if station.Name:match("^Station%d+$") then
             for _, machine in pairs(station:GetChildren()) do
                 if slots[machine.Name] then
-                    table.insert(slots[machine.Name], {
-                        station = station,
-                        model = machine
-                    })
+                    table.insert(slots[machine.Name], { station = station, model = machine })
                 end
             end
         end
@@ -212,22 +212,15 @@ function RepairManager:_resolveMachineIO(machine)
 
     if not cd then
         local btn = machine:FindFirstChild("Button")
-        if btn then
-            cd = btn:FindFirstChildWhichIsA("ClickDetector")
-        end
+        if btn then cd = btn:FindFirstChildWhichIsA("ClickDetector") end
     end
-
     if not cd then
         local faucet = machine:FindFirstChild("Faucet")
-        if faucet then
-            cd = faucet:FindFirstChildWhichIsA("ClickDetector")
-        end
+        if faucet then cd = faucet:FindFirstChildWhichIsA("ClickDetector") end
     end
-
     if not detector then
         detector = machine:FindFirstChildWhichIsA("BasePart")
     end
-
     return detector, cd
 end
 
@@ -240,12 +233,10 @@ function RepairManager:_repairSinglePart(partModel, detector, clickDetector, saf
     task.wait(WARP_SETTLE)
 
     local elapsed = 0
-    local POLL = 0.2
+    local POLL    = 0.2
     while elapsed < 10 do
         local pos = partModel:IsA("Model") and partModel:GetPivot().Position or partModel.Position
-        if (pos - detector.CFrame.Position).Magnitude < 3 then
-            break
-        end
+        if (pos - detector.CFrame.Position).Magnitude < 3 then break end
         task.wait(POLL)
         elapsed = elapsed + POLL
     end
@@ -268,7 +259,6 @@ function RepairManager:_runSlot(slotInfo, partSubList, safeBase, slotIndex)
         warn(string.format("[RepairManager] Slot %s/%s: no IO", slotInfo.station.Name, slotInfo.model.Name))
         return
     end
-
     for i, partData in ipairs(partSubList) do
         local model = waitForPartModel(partData.Name, FIND_PART_TIMEOUT)
         if model then
@@ -281,7 +271,6 @@ end
 
 function RepairManager:_distributeToSlots(slots, queues)
     local assignments = {}
-
     for machineType, partList in pairs(queues) do
         local machineSlots = slots[machineType]
         if not machineSlots or #machineSlots == 0 then
@@ -293,7 +282,6 @@ function RepairManager:_distributeToSlots(slots, queues)
                 table.insert(slotAssign, entry)
                 table.insert(assignments, entry)
             end
-
             for i, partData in ipairs(partList) do
                 local idx = ((i - 1) % #slotAssign) + 1
                 table.insert(slotAssign[idx].parts, partData)
@@ -305,10 +293,7 @@ end
 
 function RepairManager:removeAllParts(engineBay)
     local vehicle = findPlayerVehicle()
-    if not vehicle then
-        return
-    end
-
+    if not vehicle then return end
     for _, part in pairs(engineBay:GetChildren()) do
         if vehicle:FindFirstChild("PartsEvent") then
             vehicle.PartsEvent:FireServer("RemovePart", part.Name)
@@ -324,10 +309,8 @@ function RepairManager:reinstallAllParts()
         warn("[RepairManager] No vehicle for reinstall.")
         return
     end
-
     local partsEvent = VehFolder:WaitForChild(playerVehicle.Name):WaitForChild("PartsEvent")
-    local count = 0
-
+    local count      = 0
     for _, v in pairs(MoveableParts:GetChildren()) do
         if v:GetAttribute("Owner") == Player.Name then
             partsEvent:FireServer("ReapplyPart", v)
@@ -335,7 +318,6 @@ function RepairManager:reinstallAllParts()
             task.wait(0.1)
         end
     end
-
     if count > 0 then
         notify(string.format("%d part(s) reinstalled.", count), "settings")
     end
@@ -352,8 +334,8 @@ function RepairManager:runFullRepair(vehicle, building)
 
     local queues = {
         GrindingMachine = {},
-        PartsWasher = {},
-        BatteryCharger = {}
+        PartsWasher     = {},
+        BatteryCharger  = {}
     }
     local total = 0
 
@@ -372,9 +354,9 @@ function RepairManager:runFullRepair(vehicle, building)
         return
     end
 
-    local assignments = self:_distributeToSlots(slots, queues)
-    local done = 0
-    local total_slots = #assignments
+    local assignments  = self:_distributeToSlots(slots, queues)
+    local done         = 0
+    local total_slots  = #assignments
 
     for idx, assign in ipairs(assignments) do
         if #assign.parts > 0 then
@@ -391,6 +373,10 @@ function RepairManager:runFullRepair(vehicle, building)
         task.wait(0.5)
     end
 end
+
+-- =========================================================================
+-- FarmSession
+-- =========================================================================
 
 local FarmSession = {}
 FarmSession.__index = FarmSession
@@ -430,18 +416,17 @@ function FarmSession:_phase1_acquire()
             break
         end
 
-        local _, instances = VehicleScanner.scan()
-        local targetLabel = nil
-        local targetVeh = nil
+        local _, instances    = VehicleScanner.scan()
+        local targetLabel     = nil
+        local targetVeh       = nil
         local bestMatchChance = -1
 
         for label, veh in pairs(instances) do
             local sc = veh:GetAttribute("SpawnChance") or 0
-
             if sc <= self.config.maxSpawnChance and sc > bestMatchChance then
                 bestMatchChance = sc
-                targetLabel = label
-                targetVeh = veh
+                targetLabel     = label
+                targetVeh       = veh
             end
         end
 
@@ -450,9 +435,9 @@ function FarmSession:_phase1_acquire()
             continue
         end
 
-        local vehName = targetVeh.Name
+        local vehName   = targetVeh.Name
         local character = Player.Character
-        local root = character and character:FindFirstChild("HumanoidRootPart")
+        local root      = character and character:FindFirstChild("HumanoidRootPart")
 
         if root and targetVeh:FindFirstChild("Body") and targetVeh.Body:FindFirstChild("Plate") then
             root.CFrame = targetVeh.Body.Plate.CFrame
@@ -481,9 +466,7 @@ function FarmSession:_phase1_acquire()
                     and playerGui.HUD.Frames.Confirmation:FindFirstChild("Confirm")
                 return btn and btn:IsDescendantOf(playerGui) and btn
             end)
-            if ok and result then
-                confirmBtn = result
-            end
+            if ok and result then confirmBtn = result end
         until confirmBtn or uiElapsed > 2.5
 
         if not confirmBtn then
@@ -503,28 +486,23 @@ function FarmSession:_phase1_acquire()
                 and playerGui.HUD:FindFirstChild("Frames")
                 and playerGui.HUD.Frames:FindFirstChild("Confirmation")
 
-            if not confirmFrame or not confirmFrame.Visible then
-                break
-            end
+            if not confirmFrame or not confirmFrame.Visible then break end
         until pressElapsed > 6 or not self:_alive()
 
-        local bought = false
+        local bought  = false
         local elapsed = 0
         repeat
             task.wait(0.1)
             elapsed = elapsed + 0.1
-            if GarageFolder:FindFirstChild(vehName) then
-                bought = true
-            end
+            if GarageFolder:FindFirstChild(vehName) then bought = true end
         until bought or elapsed > 5 or not self:_alive()
 
         if bought then
             notify("Purchased: " .. targetLabel, "shopping-cart")
+            leaveGarageIfInside() -- เธญเธญเธเธเธฒเธ garage เธเนเธญเธ warp
             pcall(function()
                 local charRoot = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
-                if charRoot then
-                    charRoot.CFrame = REPAIR_BASE_POS
-                end
+                if charRoot then charRoot.CFrame = REPAIR_BASE_POS end
             end)
             task.wait(1)
         else
@@ -544,39 +522,30 @@ function FarmSession:_phase2_restore(sessionVehicles)
         or buildingsFolder:FindFirstChild("PitStop")
 
     if not building then
-        warn("[FarmSession] PitStop building not found under Buildings. Available children:")
-        for _, c in pairs(buildingsFolder:GetChildren()) do
-            warn("  - " .. c.Name)
-        end
+        warn("[FarmSession] PitStop building not found. Available:")
+        for _, c in pairs(buildingsFolder:GetChildren()) do warn("  - " .. c.Name) end
         return
     end
 
     for carIdx, vehName in ipairs(sessionVehicles) do
-        if not self:_alive() then
-            break
-        end
+        if not self:_alive() then break end
         notify(string.format("Restoring %d/%d: %s", carIdx, #sessionVehicles, vehName), "settings")
 
         local activeVeh = findPlayerVehicle()
-        if activeVeh then
-            storeVehicle(activeVeh.Name)
-        end
+        if activeVeh then storeVehicle(activeVeh.Name) end
 
         Player.Character.HumanoidRootPart.CFrame = REPAIR_BASE_POS
         task.wait(0.5)
 
         spawnVehicle(vehName, Player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 15))
-
         game:GetService("ReplicatedStorage"):WaitForChild("Events"):WaitForChild("Vehicles"):WaitForChild("SetDirt"):FireServer(0)
 
         local vehicle = findPlayerVehicle()
         if not vehicle then
-            warn("[FarmSession] Vehicle not found in workspace after spawn: " .. vehName)
+            warn("[FarmSession] Vehicle not found after spawn: " .. vehName)
         else
             self.repairManager:runFullRepair(vehicle, building)
-            if not self:_alive() then
-                break
-            end
+            if not self:_alive() then break end
             self.repairManager:reinstallAllParts()
             task.wait(0.3)
             self.repairManager:reinstallAllParts()
@@ -584,16 +553,11 @@ function FarmSession:_phase2_restore(sessionVehicles)
         end
 
         task.wait(1)
-
-        if not self:_alive() then
-            break
-        end
+        if not self:_alive() then break end
         notify("Painting: " .. vehName, "paintbrush")
 
         local prePaintVeh = findPlayerVehicle()
-        if prePaintVeh then
-            storeVehicle(prePaintVeh.Name)
-        end
+        if prePaintVeh then storeVehicle(prePaintVeh.Name) end
 
         Player.Character.HumanoidRootPart.CFrame = PAINT_POS
         task.wait(0.5)
@@ -612,9 +576,7 @@ function FarmSession:_phase2_restore(sessionVehicles)
 
         local paintConfirm = Player.PlayerGui:FindFirstChild("HUD")
             and Player.PlayerGui.HUD.Frames.Paint.Confirm
-        if paintConfirm then
-            pressEnter(paintConfirm)
-        end
+        if paintConfirm then pressEnter(paintConfirm) end
 
         notify("Paint applied: " .. vehName, "paintbrush")
         task.wait(2)
@@ -628,27 +590,19 @@ function FarmSession:_phase3_hold()
     local finished    = false
     local lastSecText = -1
 
-    if self._cdConn then
-        self._cdConn:Disconnect()
-    end
+    if self._cdConn then self._cdConn:Disconnect() end
 
     self._cdConn = RunService.RenderStepped:Connect(function()
         if not self:_alive() then
             finished = true
-            if self._cdConn then
-                self._cdConn:Disconnect()
-                self._cdConn = nil
-            end
+            if self._cdConn then self._cdConn:Disconnect(); self._cdConn = nil end
             return
         end
 
         local remaining = math.ceil(self._targetEndTime - os.clock())
         if remaining <= 0 then
             finished = true
-            if self._cdConn then
-                self._cdConn:Disconnect()
-                self._cdConn = nil
-            end
+            if self._cdConn then self._cdConn:Disconnect(); self._cdConn = nil end
             return
         end
 
@@ -660,9 +614,7 @@ function FarmSession:_phase3_hold()
         end
     end)
 
-    while not finished do
-        task.wait()
-    end
+    while not finished do task.wait() end
     self._targetEndTime = 0
 end
 
@@ -676,16 +628,12 @@ function FarmSession:_phase4_sellAndDie(sessionVehicles)
     notify("Phase 4: Sequential sell then death reset", "dollar-sign")
 
     for i = #sessionVehicles, 1, -1 do
-        if not self:_alive() then
-            break
-        end
+        if not self:_alive() then break end
         local targetName = sessionVehicles[i]
         notify(string.format("Selling %d/%d: %s", #sessionVehicles - i + 1, #sessionVehicles, targetName), "dollar-sign")
 
         local activeVeh = findPlayerVehicle()
-        if activeVeh then
-            storeVehicle(activeVeh.Name)
-        end
+        if activeVeh then storeVehicle(activeVeh.Name) end
 
         Player.Character.HumanoidRootPart.CFrame = SELL_POS
         task.wait(0.5)
@@ -700,13 +648,11 @@ function FarmSession:_phase4_sellAndDie(sessionVehicles)
 
         local sellConfirm = Player.PlayerGui:FindFirstChild("HUD")
             and Player.PlayerGui.HUD.Frames.Confirmation.Confirm
-        if sellConfirm then
-            pressEnter(sellConfirm)
-        end
+        if sellConfirm then pressEnter(sellConfirm) end
         task.wait(0.5)
         Gui.SelectedCoreObject = nil
 
-        local sellOk = false
+        local sellOk      = false
         local sellElapsed = 0
         repeat
             task.wait(0.2)
@@ -749,15 +695,13 @@ function FarmSession:start()
 
     task.spawn(function()
         local staleVeh = findPlayerVehicle()
-        if staleVeh then
-            storeVehicle(staleVeh.Name)
-        end
+        if staleVeh then storeVehicle(staleVeh.Name) end
+
+        leaveGarageIfInside() -- เน€เธเนเธ garage เธ•เธฑเนเธเนเธ•เน start
 
         while self:_alive() do
             self:_phase1_acquire()
-            if not self:_alive() then
-                break
-            end
+            if not self:_alive() then break end
 
             local sessionVehicles = {}
             for _, child in pairs(GarageFolder:GetChildren()) do
@@ -767,31 +711,29 @@ function FarmSession:start()
             end
 
             if #sessionVehicles == 0 then
-                warn("[FarmSession] No vehicles after acquisition pass. Retrying.")
+                warn("[FarmSession] No vehicles after acquisition. Retrying.")
                 task.wait(3)
                 continue
             end
 
             self:_phase2_restore(sessionVehicles)
-            if not self:_alive() then
-                break
-            end
+            if not self:_alive() then break end
 
             self:_phase3_hold()
-            if not self:_alive() then
-                break
-            end
+            if not self:_alive() then break end
 
             self:_phase4_sellAndDie(sessionVehicles)
             task.wait(2)
         end
 
-        if self.config.onStopped then
-            self.config.onStopped()
-        end
+        if self.config.onStopped then self.config.onStopped() end
         notify("Loop exited. Session ID was: " .. id, "stop-circle")
     end)
 end
+
+-- =========================================================================
+-- purchaseVehicle (manual)
+-- =========================================================================
 
 local function purchaseVehicle(targetVeh, selectedLabel, onSuccess)
     if not targetVeh or not targetVeh:IsDescendantOf(VehFolder) then
@@ -827,13 +769,16 @@ local function purchaseVehicle(targetVeh, selectedLabel, onSuccess)
 
     if success then
         notify("Purchased: " .. selectedLabel, "shopping-cart")
-        if onSuccess then
-            onSuccess()
-        end
+        leaveGarageIfInside() -- เธญเธญเธ garage เธซเธฅเธฑเธเธเธทเนเธญ manual เธ”เนเธงเธข
+        if onSuccess then onSuccess() end
     else
         notify("Purchase failed or timed out.", "alert-triangle")
     end
 end
+
+-- =========================================================================
+-- UI
+-- =========================================================================
 
 local Window = WindUI:CreateWindow({
     Title  = "Garage Manager",
@@ -918,9 +863,7 @@ AutoTab:Slider({
     Value = { Min = 1, Max = 50, Default = 50 },
     Callback = function(val)
         _G.minSpawnChance = val
-        if activeFarm then
-            activeFarm.config.maxSpawnChance = val
-        end
+        if activeFarm then activeFarm.config.maxSpawnChance = val end
         notify("SpawnChance filter: " .. val, "filter")
     end
 })
@@ -935,7 +878,6 @@ local HoldSlider = AutoTab:Slider({
         local delta = val - lastSliderVal
         _G.WaitAfterPaint = val
         lastSliderVal = val
-
         if activeFarm then
             activeFarm.config.holdDuration = val
             activeFarm:adjustHold(delta)
@@ -946,9 +888,9 @@ local HoldSlider = AutoTab:Slider({
 })
 
 AutoTab:Toggle({
-    Title   = "Auto Farm  โ€”  Acquire ยท Restore ยท Paint ยท Sell ยท Respawn",
-    Icon    = "repeat",
-    Default = false,
+    Title    = "Auto Farm  โ€”  Acquire ยท Restore ยท Paint ยท Sell ยท Respawn",
+    Icon     = "repeat",
+    Default  = false,
     Callback = function(state)
         if not state then
             if activeFarm then
@@ -960,17 +902,15 @@ AutoTab:Toggle({
             return
         end
 
-        if activeFarm then
-            activeFarm:stop()
-        end
+        if activeFarm then activeFarm:stop() end
 
         activeFarm = FarmSession.new({
-            maxSpawnChance   = _G.minSpawnChance,
-            holdDuration     = _G.WaitAfterPaint,
-            onCountdownTick  = function(remaining, total)
+            maxSpawnChance  = _G.minSpawnChance,
+            holdDuration    = _G.WaitAfterPaint,
+            onCountdownTick = function(remaining, total)
                 HoldSlider:SetDesc(string.format("โณ Remaining: %ds / %ds", remaining, total))
             end,
-            onStopped        = function()
+            onStopped = function()
                 HoldSlider:SetDesc(string.format("Duration: %ds", _G.WaitAfterPaint))
             end
         })
@@ -1009,7 +949,7 @@ AutoTab:Toggle({
             notify("Auto Purchase started. Threshold: " .. (_G.targetPercentage or 5) .. "%", "play")
             while _G.autoBuyRunning do
                 local _, instances = VehicleScanner.scan()
-                local candidates = {}
+                local candidates   = {}
 
                 for label, veh in pairs(instances) do
                     local sc = veh:GetAttribute("SpawnChance") or math.huge
@@ -1018,29 +958,21 @@ AutoTab:Toggle({
                     end
                 end
 
-                if #candidates == 0 then
-                    task.wait(0.15)
-                    continue
-                end
+                if #candidates == 0 then task.wait(0.15); continue end
 
                 local targetLabel = nil
-                local targetVeh = nil
+                local targetVeh   = nil
 
                 for _, c in ipairs(candidates) do
-                    local ok, alive = pcall(function()
-                        return c.veh:IsDescendantOf(VehFolder)
-                    end)
+                    local ok, alive = pcall(function() return c.veh:IsDescendantOf(VehFolder) end)
                     if ok and alive then
                         targetLabel = c.label
-                        targetVeh = c.veh
+                        targetVeh   = c.veh
                         break
                     end
                 end
 
-                if not targetVeh then
-                    task.wait(0.15)
-                    continue
-                end
+                if not targetVeh then task.wait(0.15); continue end
                 notify("Target: " .. targetLabel, "crosshair")
 
                 pcall(function()
@@ -1073,9 +1005,7 @@ AutoTab:Toggle({
                             and playerGui.HUD.Frames.Confirmation:FindFirstChild("Confirm")
                         return btn and btn:IsDescendantOf(playerGui) and btn
                     end)
-                    if ok and result then
-                        confirmBtn = result
-                    end
+                    if ok and result then confirmBtn = result end
                 until confirmBtn or uiElapsed > 2.5
 
                 if not confirmBtn then
@@ -1087,7 +1017,7 @@ AutoTab:Toggle({
                 pressEnter(confirmBtn)
 
                 local vehName = targetVeh.Name
-                local bought = false
+                local bought  = false
                 local elapsed = 0
 
                 repeat
@@ -1100,6 +1030,7 @@ AutoTab:Toggle({
 
                 if bought then
                     notify("Purchased: " .. targetLabel, "shopping-cart")
+                    leaveGarageIfInside() -- เธญเธญเธ garage เธซเธฅเธฑเธเธเธทเนเธญ
                     break
                 else
                     warn("[AutoBuy] Unconfirmed โ€” retrying.")
@@ -1123,10 +1054,7 @@ AutoTab:Button({
         task.spawn(function()
             Player.Character.HumanoidRootPart.CFrame = REPAIR_BASE_POS
             local vehicle = findPlayerVehicle()
-            if not vehicle then
-                warn("[Repair] No vehicle.")
-                return
-            end
+            if not vehicle then warn("[Repair] No vehicle."); return end
             local building = Workspace.Map.FirstCity.Buildings["PitStop(Large)"]
             manualRepair:runFullRepair(vehicle, building)
             manualRepair:reinstallAllParts()
@@ -1143,9 +1071,7 @@ AutoTab:Button({
         task.spawn(function()
             Player.Character.HumanoidRootPart.CFrame = PAINT_POS
             local vehicle = findPlayerVehicle()
-            if vehicle then
-                storeVehicle(vehicle.Name)
-            end
+            if vehicle then storeVehicle(vehicle.Name) end
 
             local playerVeh = findPlayerVehicle()
             if playerVeh then
@@ -1172,10 +1098,7 @@ AutoTab:Button({
     Callback = function()
         Player.Character.HumanoidRootPart.CFrame = SELL_POS
         local veh = findPlayerVehicle()
-        if not veh then
-            warn("[Sell] No vehicle.")
-            return
-        end
+        if not veh then warn("[Sell] No vehicle."); return end
 
         storeVehicle(veh.Name)
         task.wait(0.5)
@@ -1197,10 +1120,7 @@ VehTab:Button({
     Callback = function()
         task.spawn(function()
             local veh = findPlayerVehicle()
-            if not veh then
-                warn("[Vehicle] No vehicle to deploy.")
-                return
-            end
+            if not veh then warn("[Vehicle] No vehicle to deploy."); return end
             spawnVehicle(veh.Name, Player.Character.HumanoidRootPart.CFrame * CFrame.new(0, 0, 15))
         end)
     end
@@ -1211,10 +1131,7 @@ VehTab:Button({
     Icon     = "map-pin",
     Callback = function()
         local v = findPlayerVehicle()
-        if not v then
-            notify("No active vehicle.", "alert-triangle")
-            return
-        end
+        if not v then notify("No active vehicle.", "alert-triangle"); return end
         local root = Player.Character and Player.Character:FindFirstChild("HumanoidRootPart")
         if root and v:FindFirstChild("Body") and v.Body:FindFirstChild("Plate") then
             root.CFrame = v.Body.Plate.CFrame
